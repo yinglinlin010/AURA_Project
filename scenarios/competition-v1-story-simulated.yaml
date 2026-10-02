@@ -8,8 +8,10 @@ description: >-
   assert enabled logical registry roles and shared snapshots only. This does
   not provide recommendation ranking/comparison, rendered multi-HMI sync,
   Window clock/weather content, noisy-cabin or wake-word evidence, real parking
-  sensing/guidance, warning or speech latency, stale-to-live refresh, live
-  provider/network behavior, or physical-device evidence.
+  sensing/guidance, warning or speech latency, provider refresh behavior, live
+  provider/network behavior, or physical-device evidence. The same simulated
+  place-evidence signal carries stale metadata offline and fresh metadata after
+  reconnection; the recommender does not consume this generic signal.
 timeline:
   - id: simulated-network-online
     atMs: 0
@@ -100,12 +102,26 @@ timeline:
     text: Turn cabin volume up
     requestedByRole: center
     expectedAvailability: offline_local
+  - id: cached-place-evidence-stale
+    atMs: 1450
+    kind: signal
+    signal:
+      type: recommendation.place_evidence
+      value: { placeId: sim:drink-stop, detourMinutes: 7 }
+      freshness: stale
   - id: simulated-network-recovered
     atMs: 1500
     kind: signal
     signal:
       type: connectivity.mode
       value: { mode: online, evidence: SIMULATED_NETWORK_RESTORED }
+  - id: refreshed-place-evidence-fresh
+    atMs: 1550
+    kind: signal
+    signal:
+      type: recommendation.place_evidence
+      value: { placeId: sim:drink-stop, detourMinutes: 5 }
+      freshness: fresh
   - id: cloud-route-recovered
     atMs: 1600
     kind: intent
@@ -191,6 +207,9 @@ expected:
     - { displayId: front-passenger-main, role: front_passenger }
     - { displayId: rear-tablet, role: rear }
     - { displayId: window-tablet, role: interactive_window }
+  signalFreshness:
+    - { stepId: cached-place-evidence-stale, state: stale }
+    - { stepId: refreshed-place-evidence-fresh, state: fresh }
   voice:
     statesAtSteps:
       - { stepId: user-invokes-voice, state: LISTENING }

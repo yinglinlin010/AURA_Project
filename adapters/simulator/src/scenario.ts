@@ -10,6 +10,7 @@ import type {
   ContextSignal,
   DisplayRegistry,
   PolicyDecision,
+  SignalFreshness,
 } from "../../../contracts/protocol/src/types.js";
 import type { ScenarioDefinition, ScenarioExpected, ScenarioMetricName, ScenarioStateFieldExpectation, ScenarioStep, ScenarioVoiceState } from "../../../contracts/scenarios/src/types.js";
 import { CoreRuntime } from "../../../packages/core-runtime/src/index.js";
@@ -37,6 +38,7 @@ export interface ScenarioRunResult {
   commandReceipts: CommandReceipt[];
   decisionObservations: Array<{ stepId: string; decision: PolicyDecision }>;
   signalReceipts: ContextIngestReceipt[];
+  signalObservations: Array<{ stepId: string; signalId: string; type: string; freshness: SignalFreshness }>;
   connectivityTransitions: Array<{
     stepId: string;
     from: string;
@@ -126,6 +128,7 @@ export class ScenarioRunner {
     const commandReceiptsByStep = new Map<string, CommandReceipt>();
     const decisionObservations: ScenarioRunResult["decisionObservations"] = [];
     const signalReceipts: ContextIngestReceipt[] = [];
+    const signalObservations: ScenarioRunResult["signalObservations"] = [];
     const connectivityTransitions: ScenarioRunResult["connectivityTransitions"] = [];
     const routingObservations: ScenarioRunResult["routingObservations"] = [];
     const perceptionObservations: ScenarioRunResult["perceptionObservations"] = [];
@@ -154,12 +157,13 @@ export class ScenarioRunner {
           value: step.signal.value,
           source: "simulated",
           timestamp: startedAt + step.atMs,
-          freshness: "fresh",
+          ...(step.signal.freshness === undefined ? {} : { freshness: step.signal.freshness }),
           ...(step.signal.confidence === undefined
             ? {}
             : { confidence: step.signal.confidence }),
         };
         signalReceipts.push(this.runtime.ingestSignal(signal, traceId));
+        signalObservations.push({ stepId: step.id, signalId: signal.signalId, type: signal.type, freshness: signal.freshness ?? "fresh" });
         if (before) {
           const after = this.runtime.getState();
           const beforeStops = before.journey.stops.map((stop) => stop.stopId);
@@ -425,6 +429,7 @@ export class ScenarioRunner {
       runtime: this.runtime,
       completedSteps: timeline.length,
       signalReceiptCount: signalReceipts.length,
+      signalObservations,
       startedAt,
       finishedAt,
       initialVoiceState,
@@ -439,6 +444,7 @@ export class ScenarioRunner {
       commandReceipts,
       decisionObservations,
       signalReceipts,
+      signalObservations,
       connectivityTransitions,
       routingObservations,
       perceptionObservations,
@@ -491,6 +497,7 @@ function assertScenarioExpectations(
     runtime: CoreRuntime;
     completedSteps: number;
     signalReceiptCount: number;
+    signalObservations: ScenarioRunResult["signalObservations"];
     startedAt: number;
     finishedAt: number;
     initialVoiceState: VoiceRuntimeState | null;
@@ -527,6 +534,9 @@ function assertScenarioExpectations(
     check(`decisions.${decisionExpected.stepId}.outcome`, decisionExpected.outcome, decision?.outcome);
     if (decisionExpected.reasonCode !== undefined) check(`decisions.${decisionExpected.stepId}.reasonCode`, decisionExpected.reasonCode, decision?.reasonCode);
     if (decisionExpected.consentRequired !== undefined) check(`decisions.${decisionExpected.stepId}.consentRequired`, decisionExpected.consentRequired, decision?.consentRequired);
+  }
+  for (const item of expected?.signalFreshness ?? []) {
+    check(`signalFreshness.${item.stepId}`, item.state, actual.signalObservations.find((signal) => signal.stepId === item.stepId)?.freshness);
   }
   for (const action of expected?.actions ?? []) {
     const aliasedProposalId = action.proposalAlias ? actual.proposalAliases.get(action.proposalAlias) : undefined;

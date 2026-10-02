@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.test.json && node --test dist-test/packages/core-runtime/test/*.test.js dist-test/apps/core-host/test/*.test.js",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/packages/core-runtime/test/*.test.js dist-test/apps/core-host/test/*.test.js dist-test/adapters/simulator/test/*.test.js",
     "start": "npm run build && npm run start:core",
     "start:core": "node dist/apps/core-host/src/main.js",
     "scenario": "node dist/adapters/simulator/src/cli.js",

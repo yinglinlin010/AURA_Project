@@ -81,15 +81,17 @@ export class OllamaProposalModel {
           body: JSON.stringify({
             model: this.modelName,
             system: [
-              "Extract only a supported cabin setting from the user's utterance.",
+              "Classify only the user's request for the narrow cabin-setting extraction task.",
               "Return exactly one JSON object matching the supplied schema.",
               "Abstain for ambiguity, unsupported requests, safety requests, or anything outside cabin volume/temperature.",
               "Never propose vehicle control, safety actions, tools, consent, policy decisions, or execution.",
               "The candidate metadata in the schema is fixed; do not alter it.",
+              "Follow the examples and classify the final utterance only.",
             ].join(" "),
-            prompt: `Trace: ${input.traceId}\nAllowed task: cabin_setting_extraction\nAllowed settings: volume, temperature_celsius\nUtterance: ${JSON.stringify(input.text)}`,
+            prompt: buildClassificationPrompt(input.text),
             format: schema,
             stream: false,
+            ...(isQwen3Model(this.modelName) ? { think: false } : {}),
             options: { temperature: 0, num_predict: 256 },
           }),
         });
@@ -152,6 +154,44 @@ export class OllamaProposalModel {
     this.labelSchema = schema as AnySchema;
     return this.labelSchema;
   }
+}
+
+function buildClassificationPrompt(utterance: string): string {
+  const proposal = (summary: string, setting: "volume" | "temperature_celsius", value: "up" | "down" | number): ProposalLabel => ({
+    decision: "proposal",
+    candidate: {
+      kind: "CHANGE_CABIN_SETTING",
+      summary,
+      targetRole: "center",
+      priority: "normal",
+      requiresConsent: true,
+      payload: setting === "volume"
+        ? { setting, direction: value as "up" | "down" }
+        : { setting, value: value as number },
+    },
+  });
+  const examples = [
+    ["Raise the cabin volume", proposal("Increase cabin audio volume", "volume", "up")],
+    ["Set the cabin temperature to 22 C", proposal("Set cabin temperature to 22 degrees", "temperature_celsius", 22)],
+    ["Make it cooler", { decision: "abstain", reason: "ambiguous" }],
+    ["Find me a restaurant", { decision: "abstain", reason: "unsupported" }],
+    ["Brake now and steer left", { decision: "abstain", reason: "out_of_scope" }],
+  ] as const;
+  const renderedExamples = examples.map(([input, label]) =>
+    `Input: ${input}\nLabel: ${JSON.stringify(label)}`,
+  ).join("\n");
+  return [
+    "Allowed task: cabin_setting_extraction",
+    "Allowed settings: volume, temperature_celsius",
+    "Examples:",
+    renderedExamples,
+    "Now classify only this utterance:",
+    `Utterance: ${JSON.stringify(utterance)}`,
+  ].join("\n");
+}
+
+function isQwen3Model(modelName: string): boolean {
+  return /^qwen3(?::|$)/i.test(modelName.trim());
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

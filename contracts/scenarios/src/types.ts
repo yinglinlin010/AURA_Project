@@ -52,6 +52,7 @@ export interface ScenarioExpected {
     min?: number;
     max?: number;
   }>;
+  signalFreshness?: Array<{ stepId: string; state: "fresh" | "cached" | "stale" | "unknown" }>;
   voice?: {
     policyDecisions?: Array<{
       stepId: string;
@@ -84,6 +85,7 @@ export interface ScenarioSignalInput {
   type: string;
   value: unknown;
   confidence?: number;
+  freshness?: "fresh" | "cached" | "stale" | "unknown";
 }
 
 export type ScenarioStep =

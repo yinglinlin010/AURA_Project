@@ -5,5 +5,5 @@
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["packages/core-runtime/test/**/*.ts", "apps/core-host/test/**/*.ts"]
+  "include": ["packages/core-runtime/test/**/*.ts", "apps/core-host/test/**/*.ts", "adapters/simulator/test/**/*.ts"]
 }

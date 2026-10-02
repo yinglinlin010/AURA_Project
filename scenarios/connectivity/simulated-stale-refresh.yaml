@@ -1,0 +1,32 @@
+id: simulated-stale-refresh
+name: Simulated context signal goes stale then fresh
+description: Replays freshness metadata for one connectivity signal type in the simulator.
+timeline:
+  - id: connectivity-stale
+    atMs: 0
+    kind: signal
+    signal:
+      type: connectivity.mode
+      value:
+        mode: offline
+        evidence: scenario stale phase
+      freshness: stale
+  - id: connectivity-fresh
+    atMs: 10
+    kind: signal
+    signal:
+      type: connectivity.mode
+      value:
+        mode: online
+        evidence: scenario refresh phase
+      freshness: fresh
+expected:
+  signalFreshness:
+    - stepId: connectivity-stale
+      state: stale
+    - stepId: connectivity-fresh
+      state: fresh
+  finalState:
+    fields:
+      - path: /connectivity/mode
+        equals: online
