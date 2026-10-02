@@ -17,6 +17,7 @@ const registry: DisplayRegistry = {
 interface GatewayClient {
   socket: WebSocket;
   runtime: CoreRuntime;
+  sessionId: string;
   close(): Promise<void>;
 }
 
@@ -37,6 +38,7 @@ async function createRegisteredClient(role: "center" | "front_passenger", simula
     throw new Error("TEST_GATEWAY_ADDRESS_UNAVAILABLE");
   }
   const socket = new WebSocket(address);
+  let sessionId = "";
   try {
     await waitForSocketOpen(socket);
     const displayId = role === "center" ? "center-main" : "front-passenger-main";
@@ -50,7 +52,9 @@ async function createRegisteredClient(role: "center" | "front_passenger", simula
       deviceId,
       traceId: `register-${role}`,
     }));
-    await Promise.all([welcome, snapshot]);
+    const [welcomeMessage] = await Promise.all([welcome, snapshot]);
+    sessionId = String(welcomeMessage.sessionId);
+    if (!sessionId || sessionId === "undefined") throw new Error("TEST_SESSION_ID_UNAVAILABLE");
   } catch (error) {
     socket.terminate();
     await gateway.close();
@@ -60,6 +64,7 @@ async function createRegisteredClient(role: "center" | "front_passenger", simula
   return {
     socket,
     runtime,
+    sessionId,
     close: async () => {
       try {
         if (socket.readyState === WebSocket.OPEN) {
@@ -160,7 +165,63 @@ test("simulated source returns Center consent proposal without changing journey 
     assert.equal(proposal.kind, "ADD_TRIP_STOP");
     assert.equal(proposal.targetRole, "center");
     assert.equal(proposal.requiresConsent, true);
+    assert.deepEqual(proposal.payload, { placeId: "garden-cafe", label: "Garden Cafe", category: "restaurant" });
+    assert.ok(result.recommendation && typeof result.recommendation === "object");
     assert.deepEqual(client.runtime.getState(), stateBefore);
+  } finally {
+    await client.close();
+  }
+});
+
+test("declining a recommendation leaves the journey unchanged and repeated commands are idempotent", async () => {
+  const client = await createRegisteredClient("center", true);
+  try {
+    const response = waitForMessage(client.socket, (message) => message.kind === "journey.recommendation.result");
+    client.socket.send(JSON.stringify(recommendationRequest("decline-recommendation")));
+    const result = await response;
+    assert.equal(result.status, "proposal");
+    const proposal = result.centerProposal as Record<string, any>;
+    const initialStops = client.runtime.getState().journey.stops;
+
+    const envelope = {
+      protocolVersion: 1,
+      kind: "command",
+      messageId: "message-propose-recommendation",
+      commandId: "command-propose-recommendation",
+      sessionId: client.sessionId,
+      traceId: "trace-propose-recommendation",
+      sentAt: Date.now(),
+      sender: { deviceId: "center-device", displayId: "center-main" },
+      command: { type: "action.propose", payload: { proposal } },
+    };
+    const firstProposalAck = waitForMessage(client.socket, (message) => message.kind === "ack" && (message.receipt as any)?.commandId === envelope.commandId);
+    client.socket.send(JSON.stringify({ kind: "command", envelope }));
+    const firstReceipt = (await firstProposalAck).receipt as Record<string, unknown>;
+    assert.equal(firstReceipt.status, "RECEIVED");
+    assert.equal(firstReceipt.replayed, false);
+
+    const secondProposalAck = waitForMessage(client.socket, (message) => message.kind === "ack" && (message.receipt as any)?.commandId === envelope.commandId);
+    client.socket.send(JSON.stringify({ kind: "command", envelope }));
+    const replayReceipt = (await secondProposalAck).receipt as Record<string, unknown>;
+    assert.equal(replayReceipt.status, "RECEIVED");
+    assert.equal(replayReceipt.replayed, true);
+
+    const declineEnvelope = {
+      ...envelope,
+      messageId: "message-decline-recommendation",
+      commandId: "command-decline-recommendation",
+      traceId: "trace-decline-recommendation",
+      sentAt: Date.now(),
+      command: { type: "action.consent", payload: { proposalId: proposal.proposalId, decision: "decline" } },
+    };
+    const declineAck = waitForMessage(client.socket, (message) => message.kind === "ack" && (message.receipt as any)?.commandId === declineEnvelope.commandId);
+    client.socket.send(JSON.stringify({ kind: "command", envelope: declineEnvelope }));
+    const declineReceipt = (await declineAck).receipt as Record<string, unknown>;
+    assert.equal(declineReceipt.status, "RECEIVED");
+    assert.equal(declineReceipt.reasonCode, "TARGET_ROLE_DECLINED");
+    assert.deepEqual(client.runtime.getState().journey.stops, initialStops);
+    const declined = client.runtime.getState().activeProposals.find((item) => item.proposalId === proposal.proposalId);
+    assert.equal(declined?.status, "declined");
   } finally {
     await client.close();
   }
