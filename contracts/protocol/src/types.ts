@@ -179,6 +179,10 @@ export interface StateSnapshot {
 
 export type AuraCommand =
   | {
+      type: "connectivity.mode.report";
+      payload: { mode: ConnectivityMode; evidence: string };
+    }
+  | {
       type: "vehicle.telemetry.report";
       payload: { vehicle: Partial<VehicleState> };
     }

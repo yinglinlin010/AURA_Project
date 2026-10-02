@@ -1,6 +1,6 @@
 # Phase 10 Offline / Cloud Router and Continuity
 
-**Status:** implemented as backend protocol/runtime behavior and a reproducible simulated scenario; runtime verification has not been performed.
+**Status:** backend protocol/runtime behavior and the simulated Control Console path are implemented; automated five-client Gateway verification and the deterministic scenario pass. This does not verify a real network interface, provider outage, or provider recovery.
 
 **Authority:** Master Spec [§61.16](../product/AURA_MASTER_SPEC_2026-10-02.md#6116-rear-to-driver-collaboration), [§§64.5–64.7](../product/AURA_MASTER_SPEC_2026-10-02.md#645-cross-display-proposal-and-handoff), [§§61.19–61.21](../product/AURA_MASTER_SPEC_2026-10-02.md#6119-testing-architecture), [§61.25](../product/AURA_MASTER_SPEC_2026-10-02.md#6125-development-roadmap----frozen-order), and [§61.27](../product/AURA_MASTER_SPEC_2026-10-02.md#6127-coding-agent-guardrails). This implementation stays within Context → Policy/Action → Shared State/Event → Experience and does not alter HMI composition.
 
@@ -13,6 +13,8 @@ The generic `ActionProposal`/provider path accepts only `secondary` and `normal`
 `AuraSharedState.connectivity` stores the canonical `online`, `degraded`, or `offline` mode plus source, observed time, freshness, and bounded evidence. A new `connectivity.state.changed` domain event is the only reducer path for changing this state. `CoreRuntime.updateConnectivity()` validates and publishes the event; an ingested `connectivity.mode` context signal is also recorded as `context.signal.received` before it produces the connectivity event. The initial state is `degraded` with derived/unknown freshness and `CONNECTIVITY_UNCONFIRMED`, so startup does not claim a successful cloud probe.
 
 Connectivity updates replace only the connectivity record. They preserve the runtime session, journey, consent state, pending proposals, tasks, and other shared state. Successful cloud provider responses record derived `online` evidence. Provider errors record derived `degraded` evidence before attempting fallback unless an explicit offline transition arrived while that request was pending; in that case offline state is retained. If a request started while online completes after an explicit offline transition, its result is discarded and local continuity is used.
+
+The web Control Console exposes **Set network online / degraded / offline** buttons. Those buttons send `connectivity.mode.report`; Core Runtime ingests it as a `connectivity.mode` signal with `source: simulated`, publishes the normal shared state event, and leaves every non-connectivity state field intact. All five logical browser sockets receive the event and reconnect snapshots retain the selected mode. The display source label remains visible so this control cannot be mistaken for an operating-system connectivity probe.
 
 ## Routing behavior
 
@@ -30,8 +32,8 @@ Connectivity updates replace only the connectivity record. They preserve the run
 npm run scenario -- scenarios/connectivity/phase10-offline-cloud-continuity.yaml --fast
 ```
 
-The CLI's scenario cloud provider is a deterministic in-process fixture and the local fallback uses the deterministic simulator adapter. Connectivity changes are simulated context signals. This scenario makes no live network, cloud-provider, model, hardware, latency, or deployment claim.
+The CLI's scenario cloud provider is a deterministic in-process fixture and the local fallback uses the deterministic simulator adapter. Connectivity changes from both the scenario and Control Console are simulated signals. This scenario makes no live network, cloud-provider, model, hardware, latency, or deployment claim.
 
 ## Verification boundary
 
-No tests, build, browser, external API, or hardware run was performed for this change. TypeScript/schema/runtime agreement and the scenario's end-to-end behavior therefore still require an authorized runtime verification pass.
+Automated evidence: the multi-client Gateway test submits a simulated offline transition, verifies one shared event reaches all five connected clients, checks `source: simulated` and command/trace lineage, confirms shared state changes, and verifies a reconnect snapshot retains offline state. Live network detection, network-interface transitions, provider behavior, and physical display behavior remain unverified.

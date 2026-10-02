@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import WebSocket from "ws";
 import type { DisplayRegistration, DisplayRegistry } from "../../../contracts/protocol/src/types.js";
+import { Gemma2BOfflineSimulator } from "../../../adapters/local/index.js";
 import { CoreRuntime } from "../../../packages/core-runtime/src/core-runtime.js";
+import { IntelligenceRouter } from "../../../packages/core-runtime/src/intelligence-router.js";
 import { HmiGateway } from "../src/hmi-gateway.js";
 
 const registry = JSON.parse(readFileSync("apps/core-host/config/display-registry.json", "utf8")) as DisplayRegistry;
@@ -69,6 +71,49 @@ test("independent registered HMI clients share events and receive current state 
     }));
     assert.equal((await replayedEvent).event.sequence, firstEvent.sequence);
 
+    const connectivityWaiters = clients.map((client) => waitForMessage(client.socket, (message) =>
+      message.kind === "event" && (message.event as Record<string, any>).type === "connectivity.state.changed"));
+    const connectivityAck = waitForMessage(clients[1]!.socket, (message) =>
+      message.kind === "ack" && (message.receipt as Record<string, any>).commandId === "connectivity-command");
+    clients[1]!.socket.send(JSON.stringify({
+      kind: "command",
+      envelope: {
+        protocolVersion: 1,
+        kind: "command",
+        messageId: "connectivity-message",
+        commandId: "connectivity-command",
+        sessionId: runtime.sessionId,
+        traceId: "connectivity-trace",
+        sentAt: Date.now(),
+        sender: { deviceId: clients[1]!.registration.deviceId, displayId: clients[1]!.registration.displayId },
+        command: { type: "connectivity.mode.report", payload: { mode: "offline", evidence: "CONTROL_CONSOLE_SIMULATION" } },
+      },
+    }));
+    const [connectivityReceipt, ...connectivityEvents] = await Promise.all([connectivityAck, ...connectivityWaiters]);
+    assert.equal(connectivityReceipt!.receipt.status, "RECEIVED");
+    const connectivityEvent = connectivityEvents[0]!.event;
+    assert.equal(connectivityEvent.payload.mode, "offline");
+    assert.equal(connectivityEvent.payload.source, "simulated");
+    assert.equal(connectivityEvent.commandId, "connectivity-command");
+    assert.ok(connectivityEvents.every((message) => message.event.eventId === connectivityEvent.eventId));
+    assert.equal(runtime.getState().connectivity.mode, "offline");
+    assert.equal(runtime.getState().connectivity.source, "simulated");
+    let cloudCalls = 0;
+    const router = new IntelligenceRouter({
+      runtime,
+      cloud: { modelName: "test-cloud", async proposeFromText() { cloudCalls++; return undefined; } },
+      local: new Gemma2BOfflineSimulator(),
+    });
+    const offlineResult = await router.handle({
+      requestId: "offline-connectivity-router-check",
+      traceId: "offline-connectivity-router-trace",
+      text: "Turn the cabin volume up",
+      requestedByRole: "center",
+    });
+    assert.equal(offlineResult.route, "local");
+    assert.equal(offlineResult.availability, "offline_local");
+    assert.equal(cloudCalls, 0);
+
     const expiredHistorySnapshot = waitForMessage(clients[1]!.socket, (message) => message.kind === "snapshot");
     clients[1]!.socket.send(JSON.stringify({
       kind: "resync", protocolVersion: 1, sessionId: runtime.sessionId,
@@ -84,6 +129,8 @@ test("independent registered HMI clients share events and receive current state 
     assert.equal(reconnected.welcome.sessionId, runtime.sessionId);
     assert.equal(reconnected.snapshot.snapshot.stateRevision, runtime.getState().revision);
     assert.equal(reconnected.snapshot.snapshot.state.driver.currentLoad, "low");
+    assert.equal(reconnected.snapshot.snapshot.state.connectivity.mode, "offline");
+    assert.equal(reconnected.snapshot.snapshot.state.connectivity.source, "simulated");
     assert.equal(reconnected.snapshot.snapshot.state.displayConnections[windowClient.registration.displayId].connected, true);
   } finally {
     await Promise.all(clients.map((client) => closeSocket(client.socket)));

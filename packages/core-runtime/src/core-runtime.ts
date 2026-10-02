@@ -105,6 +105,7 @@ export class CoreRuntime {
     evidence: string;
     freshness?: SignalFreshness;
     traceId: string;
+    commandId?: string | null;
   }): void {
     assertId(input.traceId, "INVALID_TRACE_ID");
     if (!("online degraded offline".split(" ").includes(input.mode))) throw new Error("INVALID_CONNECTIVITY_MODE");
@@ -117,7 +118,7 @@ export class CoreRuntime {
       type: "connectivity.state.changed",
       sessionId: this.sessionId,
       traceId: input.traceId,
-      commandId: null,
+      commandId: input.commandId ?? null,
       occurredAt: observedAt,
       payload: { mode: input.mode, source: input.source, observedAt, freshness, evidence: input.evidence },
     });
@@ -434,6 +435,18 @@ export class CoreRuntime {
   ): { status: CommandReceipt["status"]; reasonCode?: string } {
     const command = envelope.command;
     switch (command.type) {
+      case "connectivity.mode.report": {
+        const signal: ContextSignal<{ mode: ConnectivityMode; evidence: string }> = {
+          signalId: `command:${envelope.commandId}`,
+          type: "connectivity.mode",
+          value: command.payload,
+          source: "simulated",
+          timestamp: envelope.sentAt,
+          freshness: "fresh",
+        };
+        this.ingestSignal(signal, envelope.traceId, envelope.commandId);
+        return { status: "RECEIVED" };
+      }
       case "vehicle.telemetry.report": {
         const signal: ContextSignal<Partial<VehicleState>> = {
           signalId: `command:${envelope.commandId}`,
@@ -645,6 +658,7 @@ export class CoreRuntime {
         evidence: value.evidence ?? `SIGNAL:${signal.signalId}`,
         freshness: signal.freshness ?? "fresh",
         traceId,
+        commandId,
       });
     }
   }

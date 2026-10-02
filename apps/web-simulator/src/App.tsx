@@ -301,18 +301,18 @@ function WindowDisplay() {
   </section>;
 }
 
-function ControlConsole({ speedKph, load, connections, status, lastMessage, onSpeed, onLoad }: { speedKph: number; load: 'low' | 'normal' | 'high' | 'critical' | null; connections: GatewayState['connections']; status: string; lastMessage: string; onSpeed: (speed: number) => void; onLoad: (level: 'low' | 'normal' | 'high' | 'critical') => void }) {
+function ControlConsole({ speedKph, load, connectivity, connections, status, lastMessage, onSpeed, onLoad, onConnectivity }: { speedKph: number; load: 'low' | 'normal' | 'high' | 'critical' | null; connectivity: GatewayState['connectivity']; connections: GatewayState['connections']; status: string; lastMessage: string; onSpeed: (speed: number) => void; onLoad: (level: 'low' | 'normal' | 'high' | 'critical') => void; onConnectivity: (mode: 'online' | 'degraded' | 'offline') => void }) {
   const [speedInput, setSpeedInput] = useState(String(speedKph));
   useEffect(() => setSpeedInput(String(speedKph)), [speedKph]);
   return <section className="control-console" aria-labelledby="console-title">
     <div className="console-heading"><div><span className="console-kicker">Developer tools · outside all five display previews</span><h2 id="console-title">HMI Gateway Control Console</h2></div><span className={`gateway-state ${status}`}>{status}</span></div>
-    <p className="console-description">Protocol v1 · center-main / main-computer · shared vehicle speed <b>{Math.round(speedKph)} km/h</b> · driver load <b>{load ?? 'not reported'}</b></p>
+    <p className="console-description">Protocol v1 · center-main / main-computer · shared vehicle speed <b>{Math.round(speedKph)} km/h</b> · driver load <b>{load ?? 'not reported'}</b> · connectivity <b>{connectivity.mode} ({connectivity.source})</b></p>
     <p className="console-description logical-socket-note">Five logical registry sockets share this one browser simulation; this does not demonstrate five physical displays or independent hardware clients.</p>
     <div className="display-connections" aria-label="Logical display gateway connection states">{DISPLAY_REGISTRATIONS.map(({ displayId }) => {
       const connection = connections[displayId];
       return <div className="display-connection-card" key={displayId}><div><b>{displayId}</b><small>{connection.deviceId} · {connection.role}</small></div><span className={`gateway-state ${connection.status}`}>{connection.status}</span><small className="connection-message">{connection.lastMessage}</small></div>;
     })}</div>
-    <div className="console-controls"><label>Vehicle speed <span><input type="number" min="0" max="300" value={speedInput} onChange={(event) => setSpeedInput(event.target.value)} /> km/h</span></label><button onClick={() => { const speed = Number(speedInput); if (Number.isFinite(speed) && speed >= 0 && speed <= 300) onSpeed(speed); }}>Send vehicle.telemetry.report</button><label>Simulated driver cognitive load</label><button onClick={() => onLoad('low')}>Report low load</button><button onClick={() => onLoad('normal')}>Report normal load</button><button onClick={() => onLoad('high')}>Report high load</button><button onClick={() => onLoad('critical')}>Report critical load</button></div>
+    <div className="console-controls"><label>Vehicle speed <span><input type="number" min="0" max="300" value={speedInput} onChange={(event) => setSpeedInput(event.target.value)} /> km/h</span></label><button onClick={() => { const speed = Number(speedInput); if (Number.isFinite(speed) && speed >= 0 && speed <= 300) onSpeed(speed); }}>Send vehicle.telemetry.report</button><label>Simulated driver cognitive load</label><button onClick={() => onLoad('low')}>Report low load</button><button onClick={() => onLoad('normal')}>Report normal load</button><button onClick={() => onLoad('high')}>Report high load</button><button onClick={() => onLoad('critical')}>Report critical load</button><label>Simulated network condition</label><button aria-pressed={connectivity.mode === 'online' && connectivity.source === 'simulated'} onClick={() => onConnectivity('online')}>Set network online</button><button aria-pressed={connectivity.mode === 'degraded' && connectivity.source === 'simulated'} onClick={() => onConnectivity('degraded')}>Set network degraded</button><button aria-pressed={connectivity.mode === 'offline' && connectivity.source === 'simulated'} onClick={() => onConnectivity('offline')}>Set network offline</button></div>
     <div className="console-feedback"><span>Connection: {status}{status === 'connected' ? ' · registered · welcome received' : ''}</span><span>Last gateway message: {lastMessage}</span></div>
   </section>;
 }
@@ -330,6 +330,7 @@ function App() {
     : voice.status === 'CONNECTING' ? 'Connecting voice provider'
       : voice.status === 'STOPPING' ? 'Stopping voice'
         : voice.status;
+  const setConnectivity = (mode: 'online' | 'degraded' | 'offline') => sendCommand('center-main', { type: 'connectivity.mode.report', payload: { mode, evidence: 'CONTROL_CONSOLE_SIMULATION' } });
 
   return <main className="simulator-shell">
     <header className="simulator-header"><div className="brand-lockup"><span className="aura-mark">{BRAND.productName.slice(0, 1).toUpperCase()}</span><div><strong>{BRAND.productName}</strong><span>Multi-display simulator</span></div></div><div className="session-status"><span className="simulation-tag">Illustrative simulation</span><span className={`presence-indicator ${voice.status === 'LISTENING' ? 'listening' : ''}`}/><span>{BRAND.assistantName}&nbsp; {voiceLabel}</span><button className="listen-button" onClick={() => { if (voiceActive) stopVoice(); else void startVoice(); }} aria-pressed={voiceActive}><Icon name="mic" size={16}/>{voiceActive ? 'Stop listening' : voice.status === 'ERROR' ? 'Try voice again' : 'Listen'}</button></div></header>
@@ -362,7 +363,7 @@ function App() {
       <div className="rear-zone"><div className="screen-heading"><h1>Rear cabin</h1><span>4:3 rear display · Gateway {rearConnection.status}</span></div><RearDisplay/></div>
       <div className="window-zone"><div className="screen-heading"><h1>Ambient window</h1><span>4:3 interactive window · Gateway {windowConnection.status}</span></div><WindowDisplay/></div>
     </div>
-    <ControlConsole speedKph={gateway.speedKph} load={gateway.load} connections={gateway.connections} status={centerConnection.status} lastMessage={centerConnection.lastMessage} onSpeed={(speed) => sendCommand('center-main', { type: 'vehicle.telemetry.report', payload: { vehicle: { speedKph: speed } } })} onLoad={(level) => sendCommand('center-main', { type: 'driver.cognitive_load.report', payload: { level, timestamp: Date.now(), confidence: 1 } })}/>
+    <ControlConsole speedKph={gateway.speedKph} load={gateway.load} connectivity={gateway.connectivity} connections={gateway.connections} status={centerConnection.status} lastMessage={centerConnection.lastMessage} onSpeed={(speed) => sendCommand('center-main', { type: 'vehicle.telemetry.report', payload: { vehicle: { speedKph: speed } } })} onLoad={(level) => sendCommand('center-main', { type: 'driver.cognitive_load.report', payload: { level, timestamp: Date.now(), confidence: 1 } })} onConnectivity={setConnectivity}/>
     <footer className="simulator-footer"><span>Scenario&nbsp; <b>Munich → Stuttgart</b></span><span>Illustrative route values · shared vehicle telemetry updates when the gateway is connected</span></footer>
   </main>;
 }

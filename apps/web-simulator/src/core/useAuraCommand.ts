@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ConnectivityMode, SignalSource } from '../../../../contracts/protocol/src/types';
 
 const PROTOCOL_VERSION = 1 as const;
 const GATEWAY_URL = import.meta.env.VITE_AURA_WS_URL ?? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname || 'localhost'}:${import.meta.env.VITE_AURA_WS_PORT ?? '8080'}/ws`;
@@ -67,6 +68,7 @@ export type JourneyRecommendationState =
 export interface GatewayState {
   speedKph: number;
   load: LoadLevel;
+  connectivity: { mode: ConnectivityMode; source: SignalSource };
   proposals: SharedProposal[];
   journeyStops: SharedStop[];
   activeSafetyWarning: SharedSafetyWarning | null;
@@ -79,6 +81,7 @@ const initialConnections = Object.fromEntries(DISPLAY_REGISTRATIONS.map(({ displ
 const initialState: GatewayState = {
   speedKph: 94,
   load: null,
+  connectivity: { mode: 'degraded', source: 'derived' },
   proposals: [],
   journeyStops: [],
   activeSafetyWarning: null,
@@ -214,6 +217,7 @@ export function useAuraCommand() {
               ...current,
               speedKph: shared.vehicle?.speedKph ?? current.speedKph,
               load: shared.driver?.currentLoad ?? current.load,
+              connectivity: shared.connectivity ? { mode: shared.connectivity.mode, source: shared.connectivity.source } : current.connectivity,
               proposals: Array.isArray(shared.activeProposals) ? shared.activeProposals : current.proposals,
               journeyStops: Array.isArray(shared.journey?.stops) ? shared.journey.stops : current.journeyStops,
               activeSafetyWarning: shared.activeSafetyWarning ?? null,
@@ -223,6 +227,7 @@ export function useAuraCommand() {
             const event = data.event;
             if (event?.type === 'vehicle.state.updated') setState((current) => ({ ...current, speedKph: event.payload?.vehicle?.speedKph ?? current.speedKph }));
             else if (event?.type === 'driver.load.updated') setState((current) => ({ ...current, load: event.payload?.level ?? current.load }));
+            else if (event?.type === 'connectivity.state.changed') setState((current) => ({ ...current, connectivity: { mode: event.payload?.mode ?? current.connectivity.mode, source: event.payload?.source ?? current.connectivity.source } }));
             else if (event?.type === 'proposal.created') {
               const proposal = event.payload?.proposal;
               if (proposal) setState((current) => ({ ...current, proposals: updateProposal(current.proposals, proposal) }));

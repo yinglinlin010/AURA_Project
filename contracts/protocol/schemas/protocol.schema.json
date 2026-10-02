@@ -166,6 +166,23 @@
       "oneOf": [
         {
           "type": "object",
+          "required": ["type", "payload"],
+          "properties": {
+            "type": { "const": "connectivity.mode.report" },
+            "payload": {
+              "type": "object",
+              "required": ["mode", "evidence"],
+              "properties": {
+                "mode": { "enum": ["online", "degraded", "offline"] },
+                "evidence": { "type": "string", "minLength": 1, "maxLength": 128 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "required": [
             "type",
             "payload"
