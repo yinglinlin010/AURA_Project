@@ -2,12 +2,14 @@ import type {
   ActiveTask,
   ContextSignal,
   PolicyDecision,
+  SafetyWarningState,
 } from "../../../contracts/protocol/src/types.js";
 
 export interface SafetyOverride {
   signal: ContextSignal;
   decision: PolicyDecision;
   interruptedTasks: ActiveTask[];
+  warning: SafetyWarningState;
 }
 
 export function isCriticalSafetySignal(signal: ContextSignal): boolean {
@@ -48,5 +50,14 @@ export function createSafetyOverride(
     interruptedTasks: runningTasks.filter(
       (task) => task.status === "running" && task.priority === "secondary",
     ),
+    warning: {
+      warningId: signal.signalId,
+      signalId: signal.signalId,
+      signalType: signal.type,
+      severity: "critical",
+      source: signal.source,
+      freshness: signal.freshness ?? "unknown",
+      activatedAt: decidedAt,
+    },
   };
 }

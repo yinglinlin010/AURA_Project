@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aura.local/schemas/perception-observation.schema.json",
+  "title": "AURA bounded parking-context observation",
+  "$defs": {
+    "source": {
+      "type": "object", "required": ["kind", "sourceId"],
+      "properties": { "kind": { "enum": ["camera", "context", "simulator"] }, "sourceId": { "type": "string", "minLength": 1, "maxLength": 128 } },
+      "additionalProperties": false
+    },
+    "freshness": {
+      "type": "object", "required": ["state", "ageMs", "maxAgeMs"],
+      "properties": { "state": { "enum": ["fresh", "stale", "unknown"] }, "ageMs": { "type": ["integer", "null"], "minimum": 0 }, "maxAgeMs": { "type": "integer", "minimum": 1 } },
+      "additionalProperties": false
+    },
+    "uncertainty": {
+      "type": "object", "required": ["level", "reasons"],
+      "properties": { "level": { "enum": ["low", "moderate", "high", "unknown"] }, "reasons": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 160 }, "uniqueItems": true, "maxItems": 8 } },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": ["schemaVersion", "observationId", "observedAt", "receivedAt", "reality", "source", "freshness", "confidence", "uncertainty", "permission", "parkingContext"],
+  "properties": {
+    "schemaVersion": { "const": "aura.perception.observation.v1" },
+    "observationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "receivedAt": { "type": "string", "format": "date-time" },
+    "reality": { "enum": ["real", "simulated"] },
+    "source": {
+      "type": "object", "required": ["kind", "sourceId"],
+      "properties": {
+        "kind": { "enum": ["camera", "context", "simulator"] },
+        "sourceId": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }, "additionalProperties": false
+    },
+    "freshness": {
+      "type": "object", "required": ["state", "ageMs", "maxAgeMs"],
+      "properties": {
+        "state": { "enum": ["fresh", "stale", "unknown"] },
+        "ageMs": { "type": ["integer", "null"], "minimum": 0 },
+        "maxAgeMs": { "type": "integer", "minimum": 1 }
+      }, "additionalProperties": false
+    },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "uncertainty": {
+      "type": "object", "required": ["level", "reasons"],
+      "properties": {
+        "level": { "enum": ["low", "moderate", "high", "unknown"] },
+        "reasons": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 160 }, "uniqueItems": true, "maxItems": 8 }
+      }, "additionalProperties": false
+    },
+    "permission": {
+      "type": "object", "required": ["state", "scope"],
+      "properties": {
+        "state": { "enum": ["granted", "denied", "not_requested", "revoked", "not_applicable_simulation"] },
+        "scope": { "const": "parking_context_observation" },
+        "grantedAt": { "type": "string", "format": "date-time" }
+      }, "additionalProperties": false
+    },
+    "parkingContext": {
+      "type": "object", "required": ["phase", "cues"],
+      "properties": {
+        "phase": { "enum": ["searching", "approaching", "maneuvering", "parked", "unknown"] },
+        "cues": {
+          "type": "array", "uniqueItems": true, "maxItems": 8,
+          "items": { "enum": ["parking_maneuver_active", "repeated_adjustment", "unfamiliar_parking_context", "driver_requested_guidance"] }
+        }
+      }, "additionalProperties": false
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "reality": { "const": "real" } }, "required": ["reality"] }, "then": { "properties": { "source": { "properties": { "kind": { "enum": ["camera", "context"] } } }, "permission": { "properties": { "state": { "enum": ["granted", "denied", "not_requested", "revoked"] } } } } } },
+    { "if": { "properties": { "reality": { "const": "simulated" } }, "required": ["reality"] }, "then": { "properties": { "source": { "properties": { "kind": { "const": "simulator" } } }, "permission": { "properties": { "state": { "const": "not_applicable_simulation" } } } } } }
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,59 @@
+id: m5-parking-assistance-simulated
+name: Simulated parking assistance offer, deferral, and driver choice
+description: >-
+  Synthetic parking cues create a Center consent offer. A high-load offer is
+  released when load falls below HIGH; one is declined and one is accepted
+  into simulator-only guidance. No camera, vehicle, or actuation is involved.
+timeline:
+  - id: load-high-for-decline
+    atMs: 0
+    kind: signal
+    signal:
+      type: driver.cognitive_load
+      value: { level: high, confidence: 0.95 }
+      confidence: 0.95
+  - id: simulated-offer-decline
+    atMs: 100
+    kind: perception.parking
+    proposalId: m5-decline-offer
+    cues: [parking_maneuver_active, repeated_adjustment, unfamiliar_parking_context]
+  - id: load-normal-release-decline
+    atMs: 200
+    kind: signal
+    signal:
+      type: driver.cognitive_load
+      value: { level: normal, confidence: 0.95 }
+      confidence: 0.95
+  - id: driver-declines
+    atMs: 300
+    kind: command
+    displayId: center-main
+    command:
+      type: action.consent
+      payload: { proposalId: m5-decline-offer, decision: decline }
+  - id: load-critical-for-consent-offer
+    atMs: 400
+    kind: signal
+    signal:
+      type: driver.cognitive_load
+      value: { level: critical, confidence: 0.98 }
+      confidence: 0.98
+  - id: simulated-offer-consent
+    atMs: 500
+    kind: perception.parking
+    proposalId: m5-consent-offer
+    cues: [parking_maneuver_active, repeated_adjustment, unfamiliar_parking_context]
+  - id: load-low-release-consent
+    atMs: 600
+    kind: signal
+    signal:
+      type: driver.cognitive_load
+      value: { level: low, confidence: 0.95 }
+      confidence: 0.95
+  - id: driver-consents-to-simulator-guidance
+    atMs: 700
+    kind: command
+    displayId: center-main
+    command:
+      type: action.consent
+      payload: { proposalId: m5-consent-offer, decision: approve }

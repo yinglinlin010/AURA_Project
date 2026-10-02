@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Gemma2BOfflineSimulator } from "../../../adapters/local/gemma2b-offline-simulator.js";
+import { Gemma2BOfflineSimulator, OllamaProposalModel } from "../../../adapters/local/index.js";
 import { GeminiVoiceStreamingAdapter } from "../../../adapters/voice/gemini-live-voice-adapter.js";
 import { MockGeminiVoiceStreamingAdapter } from "../../../adapters/voice/mock-gemini-voice-streaming-adapter.js";
 import type { DisplayRole } from "../../../contracts/protocol/src/types.js";
@@ -54,6 +54,19 @@ export function createIntelligenceStack(
     runtime,
     cloud,
     local: new Gemma2BOfflineSimulator(),
+    ...(process.env.AURA_LOCAL_MODEL?.trim()
+      ? {
+          student: new OllamaProposalModel({
+            model: process.env.AURA_LOCAL_MODEL.trim(),
+            ...(process.env.OLLAMA_HOST?.trim()
+              ? { host: process.env.OLLAMA_HOST.trim() }
+              : {}),
+            ...(process.env.AURA_LOCAL_MODEL_TIMEOUT_MS?.trim()
+              ? { timeoutMs: Number(process.env.AURA_LOCAL_MODEL_TIMEOUT_MS) }
+              : {}),
+          }),
+        }
+      : {}),
     trace,
     stopVoice: (traceId) => voice.stop(traceId),
   });

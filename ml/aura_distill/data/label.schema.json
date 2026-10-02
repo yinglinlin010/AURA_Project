@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aura.local/ml/aura_distill/data/label.schema.json",
+  "title": "AURA Cabin Setting Extraction Label",
+  "description": "Narrow student completion contract for volume or cabin-temperature extraction.",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["decision", "candidate"],
+      "properties": {
+        "decision": { "const": "proposal" },
+        "candidate": {
+          "type": "object",
+          "required": ["kind", "summary", "targetRole", "priority", "requiresConsent", "payload"],
+          "properties": {
+            "kind": { "const": "CHANGE_CABIN_SETTING" },
+            "summary": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "targetRole": { "const": "center" },
+            "priority": { "const": "normal" },
+            "requiresConsent": { "const": true },
+            "payload": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "required": ["setting", "direction"],
+                  "properties": {
+                    "setting": { "const": "volume" },
+                    "direction": { "enum": ["up", "down"] }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "required": ["setting", "value"],
+                  "properties": {
+                    "setting": { "const": "temperature_celsius" },
+                    "value": { "type": "integer", "minimum": 16, "maximum": 30 }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["decision", "reason"],
+      "properties": {
+        "decision": { "const": "abstain" },
+        "reason": { "enum": ["ambiguous", "unsupported", "out_of_scope"] }
+      },
+      "additionalProperties": false
+    }
+  ]
+}

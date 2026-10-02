@@ -14,5 +14,13 @@ export function createInitialState(): AuraSharedState {
     latestSignals: {},
     displayConnections: {},
     journey: { stops: [] },
+    connectivity: {
+      mode: "degraded",
+      source: "derived",
+      observedAt: 0,
+      freshness: "unknown",
+      evidence: "CONNECTIVITY_UNCONFIRMED",
+    },
+    activeSafetyWarning: null,
   };
 }

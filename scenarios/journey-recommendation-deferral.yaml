@@ -1,0 +1,49 @@
+id: journey-recommendation-deferral
+name: Chosen journey stop waits for driver attention
+description: SIMULATED whole-journey tradeoff choice; a rear passenger proposal is deferred at high load and only added after low-load driver consent.
+timeline:
+  - id: driver-busy
+    atMs: 0
+    kind: signal
+    signal:
+      type: driver.cognitive_load
+      value:
+        level: high
+        confidence: 0.95
+      confidence: 0.95
+  - id: rear-proposes-ranked-stop
+    atMs: 300
+    kind: command
+    displayId: rear-tablet
+    command:
+      type: action.propose
+      payload:
+        proposal:
+          proposalId: journey-stop-001
+          kind: ADD_TRIP_STOP
+          summary: Add Garden Cafe; better parking and deadline margin despite a lower rating
+          targetRole: center
+          priority: secondary
+          requiresConsent: true
+          payload:
+            placeId: garden-cafe
+            label: Garden Cafe
+            category: restaurant
+  - id: driver-load-drops
+    atMs: 900
+    kind: signal
+    signal:
+      type: driver.cognitive_load
+      value:
+        level: low
+        confidence: 0.92
+      confidence: 0.92
+  - id: center-approves
+    atMs: 1200
+    kind: command
+    displayId: center-main
+    command:
+      type: action.consent
+      payload:
+        proposalId: journey-stop-001
+        decision: approve

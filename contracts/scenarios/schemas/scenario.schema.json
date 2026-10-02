@@ -3,29 +3,67 @@
   "$id": "https://aura.local/schemas/scenario.schema.json",
   "title": "AURA headless scenario definition",
   "type": "object",
-  "required": ["id", "name", "timeline"],
+  "required": [
+    "id",
+    "name",
+    "timeline"
+  ],
   "properties": {
-    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
-    "name": { "type": "string", "minLength": 1, "maxLength": 160 },
-    "description": { "type": "string", "maxLength": 1000 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1000
+    },
     "timeline": {
       "type": "array",
       "items": {
         "oneOf": [
           {
             "type": "object",
-            "required": ["id", "atMs", "kind", "signal"],
+            "required": [
+              "id",
+              "atMs",
+              "kind",
+              "signal"
+            ],
             "properties": {
-              "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
-              "atMs": { "type": "integer", "minimum": 0 },
-              "kind": { "const": "signal" },
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+              },
+              "atMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "kind": {
+                "const": "signal"
+              },
               "signal": {
                 "type": "object",
-                "required": ["type", "value"],
+                "required": [
+                  "type",
+                  "value"
+                ],
                 "properties": {
-                  "type": { "type": "string", "minLength": 1, "maxLength": 128 },
+                  "type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
                   "value": {},
-                  "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+                  "confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
                 },
                 "additionalProperties": false
               }
@@ -34,31 +72,132 @@
           },
           {
             "type": "object",
-            "required": ["id", "atMs", "kind", "displayId", "command"],
+            "required": [
+              "id",
+              "atMs",
+              "kind",
+              "displayId",
+              "command"
+            ],
             "properties": {
-              "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
-              "atMs": { "type": "integer", "minimum": 0 },
-              "kind": { "const": "command" },
-              "displayId": { "type": "string", "minLength": 1, "maxLength": 128 },
-              "command": { "$ref": "protocol.schema.json#/definitions/command" }
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+              },
+              "atMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "kind": {
+                "const": "command"
+              },
+              "displayId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "command": {
+                "$ref": "protocol.schema.json#/definitions/command"
+              }
             },
             "additionalProperties": false
           },
           {
             "type": "object",
-            "required": ["id", "atMs", "kind", "task"],
+            "required": [
+              "id",
+              "atMs",
+              "kind",
+              "task"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+              },
+              "atMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "kind": {
+                "const": "task.start"
+              },
+              "task": {
+                "type": "object",
+                "required": [
+                  "taskId",
+                  "priority"
+                ],
+                "properties": {
+                  "taskId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "priority": {
+                    "enum": [
+                      "primary",
+                      "secondary",
+                      "critical"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "atMs",
+              "kind",
+              "text",
+              "requestedByRole"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+              },
+              "atMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "kind": {
+                "const": "intent"
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "requestedByRole": {
+                "$ref": "protocol.schema.json#/definitions/displayRole"
+              },
+              "expectedAvailability": {
+                "enum": [
+                  "cloud",
+                  "local",
+                  "offline_local",
+                  "unavailable"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["id", "atMs", "kind", "proposalId", "cues"],
             "properties": {
               "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
               "atMs": { "type": "integer", "minimum": 0 },
-              "kind": { "const": "task.start" },
-              "task": {
-                "type": "object",
-                "required": ["taskId", "priority"],
-                "properties": {
-                  "taskId": { "type": "string", "minLength": 1, "maxLength": 128 },
-                  "priority": { "enum": ["primary", "secondary", "critical"] }
-                },
-                "additionalProperties": false
+              "kind": { "const": "perception.parking" },
+              "proposalId": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "cues": {
+                "type": "array", "uniqueItems": true, "maxItems": 8,
+                "items": { "enum": ["parking_maneuver_active", "repeated_adjustment", "unfamiliar_parking_context", "driver_requested_guidance"] }
               }
             },
             "additionalProperties": false

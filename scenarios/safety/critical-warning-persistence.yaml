@@ -1,0 +1,19 @@
+id: critical-warning-persistence
+name: Critical warning activates and remains shared
+description: A simulated critical context signal activates the SafetySupervisor warning and interrupts a secondary task. No dismissal semantics are authored.
+timeline:
+  - id: start-secondary-work
+    atMs: 0
+    kind: task.start
+    task:
+      taskId: scenario-secondary-work
+      priority: secondary
+  - id: critical-safety-signal
+    atMs: 100
+    kind: signal
+    signal:
+      type: safety.critical
+      value:
+        severity: critical
+        category: obstacle
+      confidence: 1

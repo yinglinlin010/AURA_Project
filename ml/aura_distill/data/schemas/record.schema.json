@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aura.local/ml/aura_distill/data/schemas/record.schema.json",
+  "title": "AURA teacher/student JSONL record",
+  "type": "object",
+  "required": ["record_id", "input", "label", "provenance"],
+  "properties": {
+    "record_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$" },
+    "input": {
+      "type": "object",
+      "required": ["locale", "utterance", "context"],
+      "properties": {
+        "locale": { "const": "en-US" },
+        "utterance": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "context": {
+          "type": "object",
+          "required": ["allowed_task", "allowed_settings"],
+          "properties": {
+            "allowed_task": { "const": "cabin_setting_extraction" },
+            "allowed_settings": { "const": ["volume", "temperature_celsius"] }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "label": { "$ref": "https://aura.local/ml/aura_distill/data/label.schema.json" },
+    "provenance": {
+      "type": "object",
+      "required": ["source_type", "source_id", "source_group", "source_license_id", "source_rights_review_status", "source_rights_reviewer_id", "source_rights_reviewed_at", "teacher_model", "teacher_revision", "teacher_model_license_id", "prompt_version", "review_status", "reviewer_id", "reviewed_at", "created_at", "dataset_version", "ai_review"],
+      "properties": {
+        "source_type": { "enum": ["human_authored", "assistant_authored", "teacher_generated", "scenario_derived"] },
+        "source_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "source_group": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "source_license_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "source_rights_review_status": { "enum": ["pending", "approved_internal_training", "rejected"] },
+        "source_rights_reviewer_id": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
+        "source_rights_reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+        "teacher_model": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+        "teacher_revision": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+        "teacher_model_license_id": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+        "prompt_version": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
+        "review_status": { "enum": ["pending", "human_approved", "human_rejected"] },
+        "reviewer_id": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
+        "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "dataset_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "ai_review": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["model", "prompt_version", "findings", "reviewed_at"],
+              "properties": {
+                "model": { "type": "string", "minLength": 1, "maxLength": 256 },
+                "prompt_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "findings": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 1000 } },
+                "reviewed_at": { "type": "string", "format": "date-time" }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "source_rights_review_status": { "const": "pending" } }, "required": ["source_rights_review_status"] },
+          "then": { "properties": { "source_rights_reviewer_id": { "type": "null" }, "source_rights_reviewed_at": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "source_rights_review_status": { "enum": ["approved_internal_training", "rejected"] } }, "required": ["source_rights_review_status"] },
+          "then": { "properties": { "source_rights_reviewer_id": { "type": "string", "minLength": 1 }, "source_rights_reviewed_at": { "type": "string", "format": "date-time" } } }
+        },
+        {
+          "if": { "properties": { "source_type": { "const": "human_authored" } }, "required": ["source_type"] },
+          "then": {
+            "properties": {
+              "source_license_id": { "const": "AURA_INTERNAL_DRAFT_NO_EXTERNAL_REDISTRIBUTION_LICENSE_ASSIGNED" },
+              "teacher_model": { "type": "null" },
+              "teacher_revision": { "type": "null" },
+              "teacher_model_license_id": { "type": "null" },
+              "prompt_version": { "type": "null" }
+            },
+            "allOf": [
+              {
+                "if": { "properties": { "review_status": { "const": "pending" } }, "required": ["review_status"] },
+                "then": { "properties": { "reviewer_id": { "type": "null" }, "reviewed_at": { "type": "null" } } }
+              },
+              {
+                "if": { "properties": { "review_status": { "enum": ["human_approved", "human_rejected"] } }, "required": ["review_status"] },
+                "then": { "properties": { "reviewer_id": { "type": "string", "minLength": 1 }, "reviewed_at": { "type": "string", "format": "date-time" } } }
+              }
+            ]
+          }
+        },
+        {
+          "if": { "properties": { "source_type": { "const": "assistant_authored" } }, "required": ["source_type"] },
+          "then": {
+            "properties": {
+              "teacher_model": { "type": "null" },
+              "teacher_revision": { "type": "null" },
+              "teacher_model_license_id": { "type": "null" },
+              "prompt_version": { "type": "string", "minLength": 1 }
+            },
+            "allOf": [
+              {
+                "if": { "properties": { "review_status": { "const": "pending" } }, "required": ["review_status"] },
+                "then": { "properties": { "reviewer_id": { "type": "null" }, "reviewed_at": { "type": "null" } } }
+              },
+              {
+                "if": { "properties": { "review_status": { "enum": ["human_approved", "human_rejected"] } }, "required": ["review_status"] },
+                "then": { "properties": { "reviewer_id": { "type": "string", "minLength": 1 }, "reviewed_at": { "type": "string", "format": "date-time" } } }
+              }
+            ]
+          }
+        },
+        {
+          "if": { "properties": { "source_type": { "const": "teacher_generated" } }, "required": ["source_type"] },
+          "then": {
+            "properties": {
+              "source_license_id": { "const": "AURA_INTERNAL_DRAFT_NO_EXTERNAL_REDISTRIBUTION_LICENSE_ASSIGNED" },
+              "teacher_model": { "type": "string", "minLength": 1 },
+              "teacher_revision": { "type": "string", "minLength": 1 },
+              "teacher_model_license_id": { "type": "string", "minLength": 1 },
+              "prompt_version": { "type": "string", "minLength": 1 }
+            },
+            "allOf": [
+              {
+                "if": { "properties": { "review_status": { "const": "pending" } }, "required": ["review_status"] },
+                "then": { "properties": { "reviewer_id": { "type": "null" }, "reviewed_at": { "type": "null" } } }
+              },
+              {
+                "if": { "properties": { "review_status": { "enum": ["human_approved", "human_rejected"] } }, "required": ["review_status"] },
+                "then": { "properties": { "reviewer_id": { "type": "string", "minLength": 1 }, "reviewed_at": { "type": "string", "format": "date-time" } } }
+              }
+            ]
+          }
+        },
+        {
+          "if": { "properties": { "source_type": { "const": "scenario_derived" } }, "required": ["source_type"] },
+          "then": {
+            "properties": {
+              "teacher_model": { "type": "null" },
+              "teacher_revision": { "type": "null" },
+              "teacher_model_license_id": { "type": "null" },
+              "prompt_version": { "type": "null" },
+              "review_status": { "enum": ["human_approved", "human_rejected"] },
+              "reviewer_id": { "type": "string", "minLength": 1 },
+              "reviewed_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

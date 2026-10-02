@@ -1,6 +1,13 @@
 node_modules/
 dist/
 dist-test/
-data/
 coverage/
 .DS_Store
+.agents/
+.impeccable/
+
+# Rights-pending training drafts and generated split/model artifacts remain local.
+ml/aura_distill/data/review_queue.jsonl
+ml/aura_distill/data/splits/
+ml/aura_distill/train/outputs/
+ml/aura_distill/train/checkpoints/

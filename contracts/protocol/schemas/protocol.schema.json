@@ -136,8 +136,7 @@
             "SUPPRESS_NOTIFICATION",
             "CHANGE_CABIN_SETTING",
             "PREPARE_OFFLINE_CONTEXT",
-            "REQUEST_CONFIRMATION",
-            "WARN"
+            "REQUEST_CONFIRMATION"
           ]
         },
         "summary": {
@@ -151,8 +150,7 @@
         "priority": {
           "enum": [
             "secondary",
-            "normal",
-            "urgent"
+            "normal"
           ]
         },
         "requiresConsent": {
@@ -446,6 +444,41 @@
       },
       "additionalProperties": false
     },
+    "placesSearchMessage": {
+      "type": "object",
+      "required": ["kind", "protocolVersion", "requestId", "traceId", "slot", "query"],
+      "properties": {
+        "kind": { "const": "places.search" },
+        "protocolVersion": { "$ref": "#/definitions/protocolVersion" },
+        "requestId": { "$ref": "#/definitions/id" },
+        "traceId": { "$ref": "#/definitions/id" },
+        "slot": { "enum": ["origin", "destination"] },
+        "query": { "type": "string", "minLength": 1, "maxLength": 256 }
+      },
+      "additionalProperties": false
+    },
+    "journeyRoutePreviewMessage": {
+      "type": "object",
+      "required": ["kind", "protocolVersion", "requestId", "traceId", "origin", "destination"],
+      "properties": {
+        "kind": { "const": "journey.route.preview" },
+        "protocolVersion": { "$ref": "#/definitions/protocolVersion" },
+        "requestId": { "$ref": "#/definitions/id" },
+        "traceId": { "$ref": "#/definitions/id" },
+        "origin": { "$ref": "#/definitions/geoPoint" },
+        "destination": { "$ref": "#/definitions/geoPoint" }
+      },
+      "additionalProperties": false
+    },
+    "geoPoint": {
+      "type": "object",
+      "required": ["latitude", "longitude"],
+      "properties": {
+        "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+      },
+      "additionalProperties": false
+    },
     "clientMessage": {
       "oneOf": [
         {
@@ -472,6 +505,12 @@
         },
         {
           "$ref": "#/definitions/pingMessage"
+        },
+        {
+          "$ref": "#/definitions/placesSearchMessage"
+        },
+        {
+          "$ref": "#/definitions/journeyRoutePreviewMessage"
         },
         {
           "$ref": "#/definitions/voiceStartMessage"
@@ -572,8 +611,7 @@
             "SUPPRESS_NOTIFICATION",
             "CHANGE_CABIN_SETTING",
             "PREPARE_OFFLINE_CONTEXT",
-            "REQUEST_CONFIRMATION",
-            "WARN"
+            "REQUEST_CONFIRMATION"
           ]
         },
         "summary": {
@@ -587,8 +625,7 @@
         "priority": {
           "enum": [
             "secondary",
-            "normal",
-            "urgent"
+            "normal"
           ]
         },
         "requiresConsent": {
@@ -771,6 +808,20 @@
       },
       "additionalProperties": false
     },
+    "safetyWarning": {
+      "type": "object",
+      "required": ["warningId", "signalId", "signalType", "severity", "source", "freshness", "activatedAt"],
+      "properties": {
+        "warningId": { "$ref": "#/definitions/id" },
+        "signalId": { "$ref": "#/definitions/id" },
+        "signalType": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "severity": { "const": "critical" },
+        "source": { "enum": ["sensor", "simulated", "api", "derived", "cache"] },
+        "freshness": { "enum": ["fresh", "cached", "stale", "unknown"] },
+        "activatedAt": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
     "sharedState": {
       "type": "object",
       "required": [
@@ -781,7 +832,9 @@
         "activeTasks",
         "latestSignals",
         "displayConnections",
-        "journey"
+        "journey",
+        "connectivity",
+        "activeSafetyWarning"
       ],
       "properties": {
         "revision": {
@@ -847,6 +900,15 @@
             }
           },
           "additionalProperties": false
+        },
+        "connectivity": {
+          "$ref": "#/definitions/connectivityState"
+        },
+        "activeSafetyWarning": {
+          "anyOf": [
+            { "$ref": "#/definitions/safetyWarning" },
+            { "type": "null" }
+          ]
         }
       },
       "additionalProperties": false
@@ -1388,7 +1450,8 @@
               "required": [
                 "signal",
                 "decision",
-                "interruptedTaskIds"
+                "interruptedTaskIds",
+                "warning"
               ],
               "properties": {
                 "signal": {
@@ -1402,7 +1465,34 @@
                   "items": {
                     "$ref": "#/definitions/id"
                   }
+                },
+                "warning": {
+                  "$ref": "#/definitions/safetyWarning"
                 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["eventId", "sequence", "sessionId", "traceId", "commandId", "occurredAt", "type", "payload"],
+          "properties": {
+            "eventId": { "$ref": "#/definitions/id" },
+            "sequence": { "type": "integer", "minimum": 1 },
+            "sessionId": { "$ref": "#/definitions/id" },
+            "traceId": { "$ref": "#/definitions/id" },
+            "commandId": { "type": ["string", "null"], "maxLength": 128 },
+            "occurredAt": { "type": "integer", "minimum": 0 },
+            "type": { "const": "safety.warning.cleared" },
+            "payload": {
+              "type": "object",
+              "required": ["warningId", "clearedAt", "clearedBy"],
+              "properties": {
+                "warningId": { "$ref": "#/definitions/id" },
+                "clearedAt": { "type": "integer", "minimum": 0 },
+                "clearedBy": { "const": "safety_supervisor" }
               },
               "additionalProperties": false
             }
@@ -1697,6 +1787,52 @@
             }
           },
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "connectivity.state.changed"
+            },
+            "payload": {
+              "$ref": "#/definitions/connectivityState"
+            }
+          },
+          "additionalProperties": false
         }
       ]
     },
@@ -1875,6 +2011,80 @@
       },
       "additionalProperties": false
     },
+    "placesSearchResultsMessage": {
+      "type": "object",
+      "required": ["kind", "protocolVersion", "requestId", "traceId", "slot", "status", "provider", "source", "observedAt", "freshness", "results"],
+      "properties": {
+        "kind": { "const": "places.search.results" },
+        "protocolVersion": { "$ref": "#/definitions/protocolVersion" },
+        "requestId": { "$ref": "#/definitions/id" },
+        "traceId": { "$ref": "#/definitions/id" },
+        "slot": { "enum": ["origin", "destination"] },
+        "status": { "enum": ["available", "unavailable", "error"] },
+        "provider": { "const": "mapbox-search-box" },
+        "source": { "enum": ["api", "unknown"] },
+        "observedAt": { "type": "integer", "minimum": 0 },
+        "freshness": { "enum": ["fresh", "unknown"] },
+        "results": {
+          "type": "array",
+          "maxItems": 10,
+          "items": { "$ref": "#/definitions/transientPlaceResult" }
+        },
+        "errorCode": { "type": "string", "minLength": 1, "maxLength": 96 }
+      },
+      "additionalProperties": false
+    },
+    "transientPlaceResult": {
+      "type": "object",
+      "required": ["provider", "placeId", "displayName", "types", "attribution", "source", "observedAt", "freshness", "use"],
+      "properties": {
+        "provider": { "const": "mapbox-search-box" },
+        "placeId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "formattedAddress": { "type": "string", "maxLength": 512 },
+        "location": { "$ref": "#/definitions/geoPoint" },
+        "types": { "type": "array", "items": { "type": "string", "maxLength": 128 }, "maxItems": 32 },
+        "attribution": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "source": { "const": "api" },
+        "observedAt": { "type": "integer", "minimum": 0 },
+        "freshness": { "const": "fresh" },
+        "use": { "const": "temporary" }
+      },
+      "additionalProperties": false
+    },
+    "journeyRoutePreviewResultsMessage": {
+      "type": "object",
+      "required": ["kind", "protocolVersion", "requestId", "traceId", "status", "provider", "source", "observedAt", "freshness", "attribution", "attributionUrl", "routes"],
+      "properties": {
+        "kind": { "const": "journey.route.preview.results" },
+        "protocolVersion": { "$ref": "#/definitions/protocolVersion" },
+        "requestId": { "$ref": "#/definitions/id" },
+        "traceId": { "$ref": "#/definitions/id" },
+        "status": { "enum": ["available", "unavailable", "error"] },
+        "provider": { "const": "mapbox-directions-v5" },
+        "source": { "enum": ["api", "unknown"] },
+        "observedAt": { "type": "integer", "minimum": 0 },
+        "freshness": { "enum": ["fresh", "unknown"] },
+        "attribution": { "type": "string", "maxLength": 256 },
+        "attributionUrl": { "type": "string", "maxLength": 512 },
+        "routes": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["distanceMeters", "durationSeconds", "observedAt"],
+            "properties": {
+              "distanceMeters": { "type": "number", "minimum": 0 },
+              "durationSeconds": { "type": "number", "minimum": 0 },
+              "observedAt": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "errorCode": { "type": "string", "minLength": 1, "maxLength": 96 }
+      },
+      "additionalProperties": false
+    },
     "serverMessage": {
       "oneOf": [
         {
@@ -1894,6 +2104,12 @@
         },
         {
           "$ref": "#/definitions/pongMessage"
+        },
+        {
+          "$ref": "#/definitions/placesSearchResultsMessage"
+        },
+        {
+          "$ref": "#/definitions/journeyRoutePreviewResultsMessage"
         },
         {
           "$ref": "#/definitions/voiceStatusMessage"
@@ -2116,6 +2332,52 @@
         "addedAt": {
           "type": "integer",
           "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "connectivityState": {
+      "type": "object",
+      "required": [
+        "mode",
+        "source",
+        "observedAt",
+        "freshness",
+        "evidence"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "online",
+            "degraded",
+            "offline"
+          ]
+        },
+        "source": {
+          "enum": [
+            "sensor",
+            "simulated",
+            "api",
+            "derived",
+            "cache"
+          ]
+        },
+        "observedAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "freshness": {
+          "enum": [
+            "fresh",
+            "cached",
+            "stale",
+            "unknown"
+          ]
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
         }
       },
       "additionalProperties": false

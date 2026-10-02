@@ -1,0 +1,92 @@
+id: phase10-offline-cloud-continuity
+name: Phase 10 offline and cloud continuity
+description: >-
+  Reproducible simulation only: establish a consented journey stop, route through
+  a simulated cloud provider online, preserve the same session and journey while
+  offline local deterministic handling remains available, then recover online.
+timeline:
+  - id: connectivity-online-initial
+    atMs: 0
+    kind: signal
+    signal:
+      type: connectivity.mode
+      value:
+        mode: online
+        evidence: SIMULATED_CLOUD_AVAILABLE
+  - id: seed-journey-stop
+    atMs: 10
+    kind: command
+    displayId: rear-tablet
+    command:
+      type: action.propose
+      payload:
+        proposal:
+          proposalId: phase10-existing-stop
+          kind: ADD_TRIP_STOP
+          summary: Add the passenger's coffee stop to the trip
+          targetRole: center
+          priority: normal
+          requiresConsent: true
+          payload:
+            label: Existing journey stop
+            placeId: sim:existing-stop
+  - id: approve-journey-stop
+    atMs: 20
+    kind: command
+    displayId: center-main
+    command:
+      type: action.consent
+      payload:
+        proposalId: phase10-existing-stop
+        decision: approve
+  - id: online-cloud-route
+    atMs: 30
+    kind: intent
+    text: Find coffee near the current route
+    requestedByRole: center
+    expectedAvailability: cloud
+  - id: seed-pending-governed-proposal
+    atMs: 35
+    kind: command
+    displayId: rear-tablet
+    command:
+      type: action.propose
+      payload:
+        proposal:
+          proposalId: phase10-pending-setting-consent
+          kind: CHANGE_CABIN_SETTING
+          summary: Increase cabin audio volume
+          targetRole: center
+          priority: normal
+          requiresConsent: true
+          payload:
+            setting: volume
+            direction: up
+  - id: connectivity-offline
+    atMs: 40
+    kind: signal
+    signal:
+      type: connectivity.mode
+      value:
+        mode: offline
+        evidence: SIMULATED_NETWORK_UNAVAILABLE
+  - id: offline-local-command
+    atMs: 50
+    kind: intent
+    text: Turn volume up
+    requestedByRole: center
+    expectedAvailability: offline_local
+  - id: connectivity-online-recovered
+    atMs: 60
+    kind: signal
+    signal:
+      type: connectivity.mode
+      value:
+        mode: online
+        evidence: SIMULATED_NETWORK_RESTORED
+  - id: online-cloud-recovered
+    atMs: 70
+    kind: intent
+    text: Find a quiet lunch place
+    requestedByRole: center
+    expectedAvailability: cloud

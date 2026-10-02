@@ -12,10 +12,14 @@ import type {
   ClientMessage,
   DisplayRegistration,
   DisplayRegistry,
+  JourneyRoutePreviewMessage,
+  PlacesSearchMessage,
   ServerMessage,
 } from "../../../contracts/protocol/src/types.js";
 import { CoreRuntime } from "../../../packages/core-runtime/src/index.js";
 import type { VoiceRuntime } from "../../../packages/core-runtime/src/voice-runtime.js";
+import type { MapboxDirectionsAdapter } from "../../../adapters/maps/mapbox-directions-adapter.js";
+import type { MapboxSearchBoxAdapter } from "../../../adapters/maps/mapbox-search-box-adapter.js";
 import { GatewayVoiceOutput } from "./gateway-voice-output.js";
 
 interface ClientSession {
@@ -33,6 +37,8 @@ export interface HmiGatewayOptions {
   protocolSchemaPath?: string;
   voice?: VoiceRuntime;
   voiceOutput?: GatewayVoiceOutput;
+  places?: MapboxSearchBoxAdapter;
+  routing?: MapboxDirectionsAdapter;
 }
 
 export class HmiGateway {
@@ -46,6 +52,8 @@ export class HmiGateway {
   private readonly clients = new Set<ClientSession>();
   private readonly voice: VoiceRuntime | undefined;
   private readonly voiceOutput: GatewayVoiceOutput | undefined;
+  private readonly places: MapboxSearchBoxAdapter | undefined;
+  private readonly routing: MapboxDirectionsAdapter | undefined;
   private voiceOwner: ClientSession | undefined;
   private readonly server: WebSocketServer;
   private readonly unsubscribe: () => void;
@@ -56,6 +64,8 @@ export class HmiGateway {
     this.runtime = options.runtime;
     this.voice = options.voice;
     this.voiceOutput = options.voiceOutput;
+    this.places = options.places;
+    this.routing = options.routing;
     this.registry = structuredClone(options.registry);
     this.host = options.host ?? "127.0.0.1";
     this.port = options.port ?? 8765;
@@ -175,6 +185,12 @@ export class HmiGateway {
           serverTime: Date.now(),
         });
         break;
+      case "places.search":
+        void this.searchPlaces(client, message);
+        break;
+      case "journey.route.preview":
+        void this.previewJourneyRoute(client, message);
+        break;
       case "voice.start":
         void this.startVoice(client, message.traceId);
         break;
@@ -184,6 +200,86 @@ export class HmiGateway {
       case "voice.text":
         void this.sendVoiceText(client, message.text, message.traceId);
         break;
+    }
+  }
+
+  /** Request-scoped response only: result content stays out of shared state/storage; adapter observability is metadata-only. */
+  private async searchPlaces(client: ClientSession, message: PlacesSearchMessage): Promise<void> {
+    const registration = client.registration;
+    if (!registration) return this.sendError(client.socket, "REGISTRATION_REQUIRED", "Register a display before searching places.", message.traceId);
+    if (registration.role !== "front_passenger") return this.sendError(client.socket, "DISCOVERY_ROLE_NOT_ALLOWED", "Place discovery is available from the passenger display.", message.traceId);
+    const observedAt = Date.now();
+    if (!this.places) {
+      this.send(client.socket, {
+        kind: "places.search.results", protocolVersion: PROTOCOL_VERSION,
+        requestId: message.requestId, traceId: message.traceId, slot: message.slot,
+        status: "unavailable", provider: "mapbox-search-box", source: "unknown",
+        observedAt, freshness: "unknown", results: [], errorCode: "MAPBOX_PROVIDER_UNAVAILABLE",
+      });
+      return;
+    }
+    try {
+      const results = await this.places.search({ query: message.query, maxResults: 5, traceId: message.traceId });
+      this.send(client.socket, {
+        kind: "places.search.results", protocolVersion: PROTOCOL_VERSION,
+        requestId: message.requestId, traceId: message.traceId, slot: message.slot,
+        status: "available", provider: "mapbox-search-box", source: "api",
+        observedAt: results[0]?.observedAt ?? Date.now(), freshness: results.length > 0 ? "fresh" : "unknown",
+        results: results.slice(0, 5).map((place) => ({
+          provider: place.provider, placeId: place.placeId, displayName: place.displayName,
+          ...(place.formattedAddress === undefined ? {} : { formattedAddress: place.formattedAddress }),
+          ...(place.location === undefined ? {} : { location: place.location }),
+          types: place.types, attribution: place.attribution, source: place.source,
+          observedAt: place.observedAt, freshness: place.freshness, use: "temporary" as const,
+        })),
+      });
+    } catch (error) {
+      this.send(client.socket, {
+        kind: "places.search.results", protocolVersion: PROTOCOL_VERSION,
+        requestId: message.requestId, traceId: message.traceId, slot: message.slot,
+        status: "error", provider: "mapbox-search-box", source: "unknown",
+        observedAt: Date.now(), freshness: "unknown", results: [],
+        errorCode: safeProviderError(error, "MAPBOX_SEARCH_FAILED"),
+      });
+    }
+  }
+
+  /** Route preview is returned directly to the requesting passenger and never persisted as a journey. */
+  private async previewJourneyRoute(client: ClientSession, message: JourneyRoutePreviewMessage): Promise<void> {
+    const registration = client.registration;
+    if (!registration) return this.sendError(client.socket, "REGISTRATION_REQUIRED", "Register a display before requesting route impact.", message.traceId);
+    if (registration.role !== "front_passenger") return this.sendError(client.socket, "DISCOVERY_ROLE_NOT_ALLOWED", "Route discovery is available from the passenger display.", message.traceId);
+    if (!this.routing) {
+      this.send(client.socket, {
+        kind: "journey.route.preview.results", protocolVersion: PROTOCOL_VERSION,
+        requestId: message.requestId, traceId: message.traceId, status: "unavailable",
+        provider: "mapbox-directions-v5", source: "unknown", observedAt: Date.now(),
+        freshness: "unknown", attribution: "", attributionUrl: "", routes: [],
+        errorCode: "MAPBOX_PROVIDER_UNAVAILABLE",
+      });
+      return;
+    }
+    try {
+      const routes = await this.routing.computeRoute({ origin: message.origin, destination: message.destination, traceId: message.traceId });
+      this.send(client.socket, {
+        kind: "journey.route.preview.results", protocolVersion: PROTOCOL_VERSION,
+        requestId: message.requestId, traceId: message.traceId,
+        status: routes.length > 0 ? "available" : "error", provider: "mapbox-directions-v5", source: "api",
+        observedAt: routes[0]?.observedAt ?? Date.now(), freshness: routes.length > 0 ? "fresh" : "unknown",
+        attribution: routes[0]?.attribution ?? "© Mapbox", attributionUrl: routes[0]?.attributionUrl ?? "https://www.mapbox.com/about/maps/",
+        routes: routes.slice(0, 3).map((route) => ({
+          distanceMeters: route.distanceMeters, durationSeconds: route.durationSeconds, observedAt: route.observedAt,
+        })),
+        ...(routes.length > 0 ? {} : { errorCode: "MAPBOX_ROUTE_UNAVAILABLE" }),
+      });
+    } catch (error) {
+      this.send(client.socket, {
+        kind: "journey.route.preview.results", protocolVersion: PROTOCOL_VERSION,
+        requestId: message.requestId, traceId: message.traceId, status: "error",
+        provider: "mapbox-directions-v5", source: "unknown", observedAt: Date.now(),
+        freshness: "unknown", attribution: "", attributionUrl: "", routes: [],
+        errorCode: safeProviderError(error, "MAPBOX_DIRECTIONS_FAILED"),
+      });
     }
   }
 
@@ -371,4 +467,9 @@ function rawToBuffer(raw: RawData): Buffer {
   if (Buffer.isBuffer(raw)) return raw;
   if (Array.isArray(raw)) return Buffer.concat(raw);
   return Buffer.from(raw);
+}
+
+function safeProviderError(error: unknown, fallback: string): string {
+  const code = error instanceof Error ? error.message : "";
+  return /^[A-Z0-9_:-]{1,96}$/.test(code) ? code : fallback;
 }

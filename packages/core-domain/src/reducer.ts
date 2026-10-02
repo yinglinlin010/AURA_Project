@@ -109,8 +109,20 @@ function reduceDomainState(state: AuraSharedState, event: AuraDomainEvent): Aura
           stops: upsertById(state.journey.stops, event.payload.stop, (stop) => stop.stopId),
         },
       };
-    case "proposal.policy.decided":
+    case "connectivity.state.changed":
+      return { ...state, connectivity: { ...event.payload } };
     case "safety.override.activated":
+      // Keep the first active warning until a matching supervisor clear event;
+      // product semantics for replacing or acknowledging one are unspecified.
+      return state.activeSafetyWarning
+        ? state
+        : { ...state, activeSafetyWarning: { ...event.payload.warning } };
+    case "safety.warning.cleared":
+      return state.activeSafetyWarning?.warningId === event.payload.warningId &&
+        event.payload.clearedAt >= state.activeSafetyWarning.activatedAt
+        ? { ...state, activeSafetyWarning: null }
+        : state;
+    case "proposal.policy.decided":
       return state;
     case "proposal.consent.recorded":
       return event.payload.decision === "approve"

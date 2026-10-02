@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { assertDisplayRegistry } from "../../../contracts/protocol/src/registry.js";
 import type { DisplayRegistry } from "../../../contracts/protocol/src/types.js";
-import { CoreRuntime } from "../../../packages/core-runtime/src/index.js";
+import { CoreRuntime, IntelligenceRouter, StructuredTraceSink } from "../../../packages/core-runtime/src/index.js";
+import { Gemma2BOfflineSimulator } from "../../local/gemma2b-offline-simulator.js";
 import { loadScenarioFile, ScenarioRunner } from "./scenario.js";
 
 function loadRegistry(): DisplayRegistry {
@@ -27,8 +28,26 @@ async function main(): Promise<void> {
   }
   const registry = loadRegistry();
   const runtime = new CoreRuntime({ registry });
+  const router = new IntelligenceRouter({
+    runtime,
+    cloud: {
+      modelName: "simulated-cloud-provider",
+      async proposeFromText(input) {
+        return {
+          kind: "SHOW_INFORMATION",
+          summary: `Simulated cloud response for: ${input.text}`,
+          targetRole: "center",
+          priority: "normal",
+          requiresConsent: false,
+          payload: { provider: "simulated", query: input.text },
+        };
+      },
+    },
+    local: new Gemma2BOfflineSimulator(),
+    trace: new StructuredTraceSink(() => {}),
+  });
   const scenario = loadScenarioFile(scenarioPath);
-  const result = await new ScenarioRunner({ runtime, registry, timeScale }).run(scenario);
+  const result = await new ScenarioRunner({ runtime, registry, timeScale, router }).run(scenario);
   process.stdout.write(
     `${JSON.stringify({ result, finalState: runtime.getState() }, null, 2)}\n`,
   );

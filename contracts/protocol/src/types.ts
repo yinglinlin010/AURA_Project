@@ -13,10 +13,13 @@ export type DisplayRole = StandardDisplayRole | (string & {});
 
 export type SignalSource = "sensor" | "simulated" | "api" | "derived" | "cache";
 export type SignalFreshness = "fresh" | "cached" | "stale" | "unknown";
+export type ConnectivityMode = "online" | "degraded" | "offline";
 export type Gear = "P" | "R" | "N" | "D" | "UNKNOWN";
 export type CognitiveLoadLevel = "low" | "normal" | "high" | "critical";
 export type PolicyOutcome = "EXECUTE" | "ASK" | "ROUTE" | "DEFER" | "REJECT";
 export type ProposalPriority = "secondary" | "normal" | "urgent";
+export type GenericActionKind = Exclude<ActionKind, "WARN">;
+export type GenericProposalPriority = Exclude<ProposalPriority, "urgent">;
 export type ActionKind =
   | "SPEAK"
   | "SHOW_INFORMATION"
@@ -67,10 +70,10 @@ export interface ContextSignal<T = unknown> {
 
 export interface ActionProposalRequest {
   proposalId: string;
-  kind: ActionKind;
+  kind: GenericActionKind;
   summary: string;
   targetRole: DisplayRole;
-  priority: ProposalPriority;
+  priority: GenericProposalPriority;
   requiresConsent: boolean;
   payload: Record<string, unknown>;
 }
@@ -133,6 +136,24 @@ export interface JourneyState {
   stops: JourneyStop[];
 }
 
+export interface ConnectivityState {
+  mode: ConnectivityMode;
+  source: SignalSource;
+  observedAt: number;
+  freshness: SignalFreshness;
+  evidence: string;
+}
+
+export interface SafetyWarningState {
+  warningId: string;
+  signalId: string;
+  signalType: string;
+  severity: "critical";
+  source: SignalSource;
+  freshness: SignalFreshness;
+  activatedAt: number;
+}
+
 export interface AuraSharedState {
   revision: number;
   vehicle: VehicleState;
@@ -142,6 +163,8 @@ export interface AuraSharedState {
   latestSignals: Record<string, ContextSignal>;
   displayConnections: Record<string, DisplayConnectionState>;
   journey: JourneyState;
+  connectivity: ConnectivityState;
+  activeSafetyWarning: SafetyWarningState | null;
 }
 
 export interface StateSnapshot {
@@ -270,7 +293,12 @@ export type AuraDomainEvent =
         signal: ContextSignal;
         decision: PolicyDecision;
         interruptedTaskIds: string[];
+        warning: SafetyWarningState;
       };
+    })
+  | (EventBase & {
+      type: "safety.warning.cleared";
+      payload: { warningId: string; clearedAt: number; clearedBy: "safety_supervisor" };
     })
   | (EventBase & {
       type: "task.registered";
@@ -291,6 +319,10 @@ export type AuraDomainEvent =
   | (EventBase & {
       type: "journey.stop.added";
       payload: { stop: JourneyStop };
+    })
+  | (EventBase & {
+      type: "connectivity.state.changed";
+      payload: ConnectivityState;
     });
 
 type EventDraftOf<T> = T extends AuraDomainEvent
@@ -326,6 +358,70 @@ export interface PingMessage {
   pingId: string;
 }
 
+/** Ephemeral provider lookup; returned Search Box results are temporary-use only. */
+export interface PlacesSearchMessage {
+  kind: "places.search";
+  protocolVersion: typeof PROTOCOL_VERSION;
+  requestId: string;
+  traceId: string;
+  slot: "origin" | "destination";
+  query: string;
+}
+
+export interface TransientPlaceResult {
+  provider: "mapbox-search-box";
+  placeId: string;
+  displayName: string;
+  formattedAddress?: string;
+  location?: { latitude: number; longitude: number };
+  types: string[];
+  attribution: string;
+  source: "api";
+  observedAt: number;
+  freshness: "fresh";
+  use: "temporary";
+}
+
+export interface PlacesSearchResultsMessage {
+  kind: "places.search.results";
+  protocolVersion: typeof PROTOCOL_VERSION;
+  requestId: string;
+  traceId: string;
+  slot: "origin" | "destination";
+  status: "available" | "unavailable" | "error";
+  provider: "mapbox-search-box";
+  source: "api" | "unknown";
+  observedAt: number;
+  freshness: "fresh" | "unknown";
+  results: TransientPlaceResult[];
+  errorCode?: string;
+}
+
+export interface JourneyRoutePreviewMessage {
+  kind: "journey.route.preview";
+  protocolVersion: typeof PROTOCOL_VERSION;
+  requestId: string;
+  traceId: string;
+  origin: { latitude: number; longitude: number };
+  destination: { latitude: number; longitude: number };
+}
+
+export interface JourneyRoutePreviewResultsMessage {
+  kind: "journey.route.preview.results";
+  protocolVersion: typeof PROTOCOL_VERSION;
+  requestId: string;
+  traceId: string;
+  status: "available" | "unavailable" | "error";
+  provider: "mapbox-directions-v5";
+  source: "api" | "unknown";
+  observedAt: number;
+  freshness: "fresh" | "unknown";
+  attribution: string;
+  attributionUrl: string;
+  routes: Array<{ distanceMeters: number; durationSeconds: number; observedAt: number }>;
+  errorCode?: string;
+}
+
 export interface VoiceStartMessage {
   kind: "voice.start";
   protocolVersion: typeof PROTOCOL_VERSION;
@@ -348,7 +444,7 @@ export interface VoiceTextMessage {
   text: string;
 }
 
-export type ClientMessage = RegisterMessage | CommandMessage | ResyncMessage | PingMessage | VoiceStartMessage | VoiceStopMessage | VoiceTextMessage;
+export type ClientMessage = RegisterMessage | CommandMessage | ResyncMessage | PingMessage | PlacesSearchMessage | JourneyRoutePreviewMessage | VoiceStartMessage | VoiceStopMessage | VoiceTextMessage;
 
 export interface WelcomeMessage {
   kind: "welcome";
@@ -421,6 +517,8 @@ export type ServerMessage =
   | EventMessage
   | ErrorMessage
   | PongMessage
+  | PlacesSearchResultsMessage
+  | JourneyRoutePreviewResultsMessage
   | VoiceStatusMessage
   | VoiceTranscriptMessage
   | VoiceAudioMessage;

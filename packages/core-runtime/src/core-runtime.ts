@@ -15,6 +15,9 @@ import type {
   AuraSharedState,
   CommandEnvelope,
   CommandReceipt,
+  ConnectivityMode,
+  SignalFreshness,
+  SignalSource,
   ContextIngestReceipt,
   ContextSignal,
   DisplayRegistry,
@@ -84,6 +87,30 @@ export class CoreRuntime {
     return structuredClone(this.state);
   }
 
+  updateConnectivity(input: {
+    mode: ConnectivityMode;
+    source: SignalSource;
+    evidence: string;
+    freshness?: SignalFreshness;
+    traceId: string;
+  }): void {
+    assertId(input.traceId, "INVALID_TRACE_ID");
+    if (!("online degraded offline".split(" ").includes(input.mode))) throw new Error("INVALID_CONNECTIVITY_MODE");
+    if (!("sensor simulated api derived cache".split(" ").includes(input.source))) throw new Error("INVALID_CONNECTIVITY_SOURCE");
+    if (typeof input.evidence !== "string" || !input.evidence.trim() || input.evidence.length > 128) throw new Error("INVALID_CONNECTIVITY_EVIDENCE");
+    const freshness = input.freshness ?? "fresh";
+    if (!("fresh cached stale unknown".split(" ").includes(freshness))) throw new Error("INVALID_CONNECTIVITY_FRESHNESS");
+    const observedAt = this.now();
+    this.emit({
+      type: "connectivity.state.changed",
+      sessionId: this.sessionId,
+      traceId: input.traceId,
+      commandId: null,
+      occurredAt: observedAt,
+      payload: { mode: input.mode, source: input.source, observedAt, freshness, evidence: input.evidence },
+    });
+  }
+
   createSnapshot(displayId?: string) {
     return {
       protocolVersion: PROTOCOL_VERSION,
@@ -145,6 +172,7 @@ export class CoreRuntime {
           signal,
           decision: safetyOverride.decision,
           interruptedTaskIds: safetyOverride.interruptedTasks.map((task) => task.taskId),
+          warning: safetyOverride.warning,
         },
       });
 
@@ -237,11 +265,50 @@ export class CoreRuntime {
   ): RuntimeProposalOutcome {
     assertId(request.proposalId, "INVALID_PROPOSAL_ID");
     assertId(traceId, "INVALID_TRACE_ID");
+    if ((request.kind as string) === "WARN" || (request.priority as string) === "urgent") {
+      throw new Error("GENERIC_PROPOSAL_CANNOT_CLAIM_SAFETY_SUPERVISOR");
+    }
     if (request.kind === "ADD_TRIP_STOP" && request.targetRole !== "center") {
       throw new Error("JOURNEY_STOP_MUST_ROUTE_TO_CENTER");
     }
     if (request.kind === "ADD_TRIP_STOP" && !request.requiresConsent) {
       throw new Error("JOURNEY_STOP_REQUIRES_DRIVER_CONSENT");
+    }
+    if (request.kind === "SHOW_GUIDANCE" && (
+      request.targetRole !== "center" ||
+      !request.requiresConsent ||
+      request.payload.guidanceMode !== "simulator_only" ||
+      request.payload.vehicleControlAllowed !== false ||
+      request.payload.diagnosisAllowed !== false ||
+      request.payload.automaticActionAllowed !== false ||
+      request.payload.reality !== "simulated" ||
+      (request.payload.source as { kind?: unknown } | undefined)?.kind !== "simulator"
+    )) {
+      throw new Error("PARKING_GUIDANCE_MUST_BE_SIMULATED_AND_CONSENT_GATED");
+    }
+    if (request.payload.discoveryMode === "route_preview") {
+      const payload = request.payload;
+      const allowedKeys = new Set([
+        "discoveryMode", "placeLabel", "routeDistanceMeters", "routeDurationSeconds",
+        "placeProvider", "placeObservedAt", "placeFreshness", "placeAttribution",
+        "provider", "source", "observedAt", "freshness", "attribution", "attributionUrl",
+      ]);
+      if (
+        request.kind !== "SHOW_INFORMATION" || request.targetRole !== "center" || !request.requiresConsent ||
+        Object.keys(payload).some((key) => !allowedKeys.has(key)) ||
+        typeof payload.placeLabel !== "string" || payload.placeLabel.trim().length === 0 || payload.placeLabel.length > 256 ||
+        payload.placeProvider !== "mapbox-search-box" ||
+        typeof payload.placeObservedAt !== "number" || !Number.isSafeInteger(payload.placeObservedAt) || payload.placeObservedAt < 0 ||
+        payload.placeFreshness !== "fresh" || typeof payload.placeAttribution !== "string" || payload.placeAttribution.trim().length === 0 ||
+        payload.provider !== "mapbox-directions-v5" || payload.source !== "api" ||
+        typeof payload.observedAt !== "number" || !Number.isSafeInteger(payload.observedAt) || payload.observedAt < 0 || payload.freshness !== "fresh" ||
+        typeof payload.routeDistanceMeters !== "number" || !Number.isFinite(payload.routeDistanceMeters) || payload.routeDistanceMeters < 0 ||
+        typeof payload.routeDurationSeconds !== "number" || !Number.isFinite(payload.routeDurationSeconds) || payload.routeDurationSeconds < 0 ||
+        typeof payload.attribution !== "string" || payload.attribution.trim().length === 0 ||
+        typeof payload.attributionUrl !== "string" || payload.attributionUrl.trim().length === 0
+      ) {
+        throw new Error("TRANSIENT_ROUTE_PREVIEW_PROPOSAL_INVALID");
+      }
     }
     if (this.state.activeProposals.some((proposal) => proposal.proposalId === request.proposalId)) {
       throw new Error("PROPOSAL_ID_ALREADY_EXISTS");
@@ -474,6 +541,17 @@ export class CoreRuntime {
       return { status: "RECEIVED", reasonCode: "JOURNEY_STOP_ADDED" };
     }
 
+    if (decision?.outcome === "EXECUTE" && result.proposal.payload.discoveryMode === "route_preview") {
+      this.changeProposalStatus(
+        result.proposal.proposalId,
+        "completed",
+        "TRANSIENT_ROUTE_PREVIEW_ACKNOWLEDGED_NO_JOURNEY_CHANGE",
+        envelope.traceId,
+        envelope.commandId,
+      );
+      return { status: "RECEIVED", reasonCode: "TRANSIENT_ROUTE_PREVIEW_ACKNOWLEDGED_NO_JOURNEY_CHANGE" };
+    }
+
     this.changeProposalStatus(
       result.proposal.proposalId,
       result.status,
@@ -538,6 +616,17 @@ export class CoreRuntime {
       if (load.level === "low" || load.level === "normal") {
         this.releaseDeferredProposals(traceId, commandId);
       }
+    }
+
+    if (signal.type === "connectivity.mode") {
+      const value = signal.value as { mode: ConnectivityMode; evidence?: string };
+      this.updateConnectivity({
+        mode: value.mode,
+        source: signal.source,
+        evidence: value.evidence ?? `SIGNAL:${signal.signalId}`,
+        freshness: signal.freshness ?? "fresh",
+        traceId,
+      });
     }
   }
 
@@ -718,6 +807,19 @@ function statusForOutcome(decision: PolicyDecision): ProposalStatus {
 
 function validateKnownSignal(signal: ContextSignal): void {
   switch (signal.type) {
+    case "connectivity.mode": {
+      if (
+        !isRecord(signal.value) ||
+        Object.keys(signal.value).some((key) => key !== "mode" && key !== "evidence") ||
+        !("online degraded offline".split(" ").includes(String(signal.value.mode)))
+      ) {
+        throw new Error("INVALID_CONNECTIVITY_MODE");
+      }
+      if (signal.value.evidence !== undefined && (typeof signal.value.evidence !== "string" || !signal.value.evidence.trim() || signal.value.evidence.length > 128)) {
+        throw new Error("INVALID_CONNECTIVITY_EVIDENCE");
+      }
+      return;
+    }
     case "vehicle.telemetry": {
       if (!isRecord(signal.value)) throw new Error("INVALID_VEHICLE_TELEMETRY");
       const entries = Object.entries(signal.value);

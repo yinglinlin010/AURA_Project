@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aura.local/schemas/parking-assistance-assessment.schema.json",
+  "title": "AURA bounded parking assistance assessment",
+  "type": "object",
+  "required": ["schemaVersion", "assessmentId", "observationId", "reality", "source", "observedAt", "freshness", "inputConfidence", "uncertainty", "helpLikelihood", "outcome", "offer", "boundaries", "reasons"],
+  "properties": {
+    "schemaVersion": { "const": "aura.perception.assessment.v1" },
+    "assessmentId": { "type": "string", "minLength": 1 },
+    "observationId": { "type": "string", "minLength": 1 },
+    "reality": { "enum": ["real", "simulated"] },
+    "source": { "$ref": "perception-observation.schema.json#/$defs/source" },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "freshness": { "$ref": "perception-observation.schema.json#/$defs/freshness" },
+    "inputConfidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "uncertainty": { "$ref": "perception-observation.schema.json#/$defs/uncertainty" },
+    "helpLikelihood": { "type": "number", "minimum": 0, "maximum": 1 },
+    "outcome": { "enum": ["OFFER", "NO_OFFER", "UNCERTAIN"] },
+    "offer": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object", "required": ["type", "text", "targetRole", "requiresConsent"],
+          "properties": {
+            "type": { "const": "proactive_assistance_offer" },
+            "text": { "const": "Would you like parking guidance?" },
+            "targetRole": { "const": "center" },
+            "requiresConsent": { "const": true }
+          }, "additionalProperties": false
+        }
+      ]
+    },
+    "boundaries": {
+      "type": "object", "required": ["vehicleControlAllowed", "diagnosisAllowed", "automaticActionAllowed"],
+      "properties": {
+        "vehicleControlAllowed": { "const": false },
+        "diagnosisAllowed": { "const": false },
+        "automaticActionAllowed": { "const": false }
+      }, "additionalProperties": false
+    },
+    "reasons": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+  },
+  "allOf": [
+    { "if": { "properties": { "outcome": { "const": "OFFER" } }, "required": ["outcome"] }, "then": { "properties": { "offer": { "not": { "const": null } } } } },
+    { "if": { "properties": { "outcome": { "enum": ["NO_OFFER", "UNCERTAIN"] } }, "required": ["outcome"] }, "then": { "properties": { "offer": { "const": null } } } }
+  ],
+  "additionalProperties": false
+}

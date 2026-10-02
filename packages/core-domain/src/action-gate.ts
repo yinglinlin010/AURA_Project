@@ -26,6 +26,20 @@ export function evaluateActionProposal(input: ActionGateInput): PolicyDecision {
     decidedAt: input.decidedAt,
   };
 
+  if (!("secondary normal".split(" ").includes(proposal.priority as string))) {
+    return { ...base, outcome: "REJECT", reasonCode: "INVALID_PROPOSAL_PRIORITY" };
+  }
+
+  // Generic proposals, including model/provider output, cannot claim the
+  // trusted Safety Supervisor's urgent-warning capability. Critical signals
+  // continue through createSafetyOverride's separate event path.
+  if ((proposal.kind as string) === "WARN") {
+    return { ...base, outcome: "REJECT", reasonCode: "SAFETY_WARNING_REQUIRES_SUPERVISOR" };
+  }
+  if ((proposal.priority as string) === "urgent") {
+    return { ...base, outcome: "REJECT", reasonCode: "URGENT_PRIORITY_REQUIRES_SAFETY_SUPERVISOR" };
+  }
+
   if (!input.allowedRoles.has(proposal.targetRole)) {
     return {
       ...base,
@@ -35,7 +49,6 @@ export function evaluateActionProposal(input: ActionGateInput): PolicyDecision {
   }
 
   if (
-    proposal.priority === "secondary" &&
     (state.driver.currentLoad === "high" || state.driver.currentLoad === "critical")
   ) {
     return {
