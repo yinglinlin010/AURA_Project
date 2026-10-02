@@ -1,0 +1,200 @@
+id: competition-v1-story-simulated
+name: Competition V1 journey story (simulation)
+description: >-
+  One deterministic, replayable composition of the currently supported story
+  paths: restaurant-intent routing, rear-to-driver consent, cognitive-load
+  deferral, synthetic parking assistance, a synthetic critical warning, mock
+  voice stop, and offline/local/online routing. Five display entries below
+  assert enabled logical registry roles and shared snapshots only. This does
+  not provide recommendation ranking/comparison, rendered multi-HMI sync,
+  Window clock/weather content, noisy-cabin or wake-word evidence, real parking
+  sensing/guidance, warning or speech latency, stale-to-live refresh, live
+  provider/network behavior, or physical-device evidence.
+timeline:
+  - id: simulated-network-online
+    atMs: 0
+    kind: signal
+    signal:
+      type: connectivity.mode
+      value: { mode: online, evidence: SIMULATED_CLOUD_AVAILABLE }
+  - id: restaurant-request
+    atMs: 100
+    kind: intent
+    text: Find a restaurant with easy parking, little detour, drinks nearby, and enough time to reach the hotel
+    requestedByRole: front_passenger
+    expectedAvailability: cloud
+  - id: complex-driving-moment
+    atMs: 200
+    kind: signal
+    signal:
+      type: driver.cognitive_load
+      value: { level: high, confidence: 0.95 }
+      confidence: 0.95
+  - id: rear-proposes-drink-stop
+    atMs: 300
+    kind: command
+    displayId: rear-tablet
+    command:
+      type: action.propose
+      payload:
+        proposal:
+          proposalId: story-drink-stop
+          kind: ADD_TRIP_STOP
+          summary: Add a nearby drink stop after the restaurant
+          targetRole: center
+          priority: secondary
+          requiresConsent: true
+          payload: { placeId: sim:drink-stop, label: Nearby drink stop, category: cafe }
+  - id: driver-attention-available
+    atMs: 500
+    kind: signal
+    signal:
+      type: driver.cognitive_load
+      value: { level: low, confidence: 0.92 }
+      confidence: 0.92
+  - id: driver-approves-drink-stop
+    atMs: 600
+    kind: command
+    displayId: center-main
+    command:
+      type: action.consent
+      payload: { proposalId: story-drink-stop, decision: approve }
+  - id: synthetic-parking-context
+    atMs: 700
+    kind: perception.parking
+    proposalId: story-parking-guidance
+    cues: [parking_maneuver_active, repeated_adjustment, unfamiliar_parking_context]
+  - id: driver-accepts-parking-guidance
+    atMs: 800
+    kind: command
+    displayId: center-main
+    command:
+      type: action.consent
+      payload: { proposalId: story-parking-guidance, decision: approve }
+  - id: start-secondary-task
+    atMs: 900
+    kind: task.start
+    task: { taskId: story-secondary-task, priority: secondary }
+  - id: synthetic-critical-obstacle
+    atMs: 1000
+    kind: signal
+    signal:
+      type: safety.critical
+      value: { severity: critical, category: obstacle }
+      confidence: 1
+  - id: user-invokes-voice
+    atMs: 1100
+    kind: voice.start
+  - id: user-says-stop
+    atMs: 1200
+    kind: voice.stop
+  - id: simulated-network-offline
+    atMs: 1300
+    kind: signal
+    signal:
+      type: connectivity.mode
+      value: { mode: offline, evidence: SIMULATED_NETWORK_UNAVAILABLE }
+  - id: useful-local-request
+    atMs: 1400
+    kind: intent
+    text: Turn cabin volume up
+    requestedByRole: center
+    expectedAvailability: offline_local
+  - id: simulated-network-recovered
+    atMs: 1500
+    kind: signal
+    signal:
+      type: connectivity.mode
+      value: { mode: online, evidence: SIMULATED_NETWORK_RESTORED }
+  - id: cloud-route-recovered
+    atMs: 1600
+    kind: intent
+    text: Find a quiet lunch place near the route
+    requestedByRole: center
+    expectedAvailability: cloud
+expected:
+  initialState:
+    fields:
+      - path: /journey/stops
+        equals: []
+      - path: /activeSafetyWarning
+        equals: null
+  finalState:
+    fields:
+      - path: /journey/stops/0/placeId
+        equals: sim:drink-stop
+      - path: /connectivity/mode
+        equals: online
+      - path: /activeSafetyWarning/severity
+        equals: critical
+      - path: /activeTasks/0/interruptionReason
+        equals: CRITICAL_SAFETY_SIGNAL_LOCAL_OVERRIDE
+  commands:
+    - stepId: rear-proposes-drink-stop
+      status: RECEIVED
+      reasonCode: DRIVER_COGNITIVE_LOAD_HIGH
+    - stepId: driver-approves-drink-stop
+      status: RECEIVED
+      reasonCode: JOURNEY_STOP_ADDED
+    - stepId: driver-accepts-parking-guidance
+      status: RECEIVED
+      reasonCode: TARGET_ROLE_APPROVED
+  decisions:
+    - stepId: rear-proposes-drink-stop
+      proposalId: story-drink-stop
+      outcome: DEFER
+      reasonCode: DRIVER_COGNITIVE_LOAD_HIGH
+      consentRequired: true
+    - stepId: driver-attention-available
+      proposalId: story-drink-stop
+      outcome: ROUTE
+      reasonCode: DRIVER_LOAD_BELOW_DEFERRAL_THRESHOLD
+    - stepId: driver-approves-drink-stop
+      proposalId: story-drink-stop
+      outcome: EXECUTE
+      reasonCode: CONSENT_GRANTED_POLICY_REVALIDATED
+    - stepId: synthetic-parking-context
+      proposalId: story-parking-guidance
+      outcome: ROUTE
+      consentRequired: true
+  actions:
+    - stepId: rear-proposes-drink-stop
+      proposalId: story-drink-stop
+      kind: ADD_TRIP_STOP
+      targetRole: center
+      status: deferred
+    - stepId: driver-approves-drink-stop
+      proposalId: story-drink-stop
+      kind: ADD_TRIP_STOP
+      targetRole: center
+      status: completed
+    - stepId: driver-accepts-parking-guidance
+      proposalId: story-parking-guidance
+      kind: SHOW_GUIDANCE
+      targetRole: center
+      status: executing
+    - stepId: restaurant-request
+      kind: SHOW_INFORMATION
+      targetRole: center
+      status: routed
+    - stepId: useful-local-request
+      kind: CHANGE_CABIN_SETTING
+      targetRole: center
+      status: awaiting_consent
+    - stepId: cloud-route-recovered
+      kind: SHOW_INFORMATION
+      targetRole: center
+      status: routed
+  displays:
+    - { displayId: cluster-main, role: cluster, stateFields: [{ path: /activeSafetyWarning/severity, equals: critical }] }
+    - { displayId: center-main, role: center, stateFields: [{ path: /journey/stops/0/placeId, equals: sim:drink-stop }] }
+    - { displayId: front-passenger-main, role: front_passenger }
+    - { displayId: rear-tablet, role: rear }
+    - { displayId: window-tablet, role: interactive_window }
+  voice:
+    statesAtSteps:
+      - { stepId: user-invokes-voice, state: LISTENING }
+      - { stepId: user-says-stop, state: IDLE }
+    requiredTransitions:
+      - { from: IDLE, to: LISTENING }
+      - { from: LISTENING, to: IDLE }
