@@ -16,7 +16,7 @@ HMI 視覺來源是使用者指定的 [Antigravity 五螢幕圖與交接規格](
 - Control Console 可報告車速及 `low`、`normal`、`high`、`critical` 認知負荷；Core 將未觀測負荷表示為 `currentLoad` 缺席，confidence 為獨立 metadata。`packages/core-domain/src/action-gate.ts` 使 secondary proposal 在 high/critical 負荷時延後，負荷回到 normal/low 時重新評估。
 - Scenario Runner（`adapters/simulator/src/cli.ts`、`scenario.ts`）使用相同 `CoreRuntime` signal/command intake，不是視覺 Control Console。
 - Gateway 與 Core Runtime 已由 core host 接通；host 在 `main.ts` 建立 Voice Runtime 與 intelligence stack。Browser Center 使用 `AudioWorklet` 擷取並重採樣為 16 kHz、單聲道 signed 16-bit PCM，透過 `voice.start` / `voice.stop` 與二進位音訊 frame 連接 Gateway；UI 消費 voice status、transcript、error，並播放 Gateway 回傳的 provider PCM。host 預設使用 mock speech adapter，只有環境設定為 live 且提供 Gemini key 時才選 live Gemini adapter；此 browser 路徑不代表車載硬體音訊整合或已驗證延遲/品質。
-- `Gemma2BOfflineSimulator` 只做確定性文字規則匹配，不執行本機模型推論。Places、routing、weather、SQLite journey adapters 有實作，但 `createExternalAdapterStack()` 目前未由 host 啟動流程呼叫；不可描述成已接入完整 provider stack。Camera/perception 與 offline/cloud continuity 也不是目前證實已整合的 runtime 能力。
+- `Gemma2BOfflineSimulator` 只做確定性文字規則匹配，不執行本機模型推論。Places、routing、weather、SQLite journey adapters 有實作，Core Host 在設定 `MAPBOX_ACCESS_TOKEN` 時會建立 stack，但目前沒有 HMI Gateway、journey scorer 或 UI 呼叫 places/routing 方法；不可描述成 end-to-end provider flow。Camera/perception 與 offline/cloud continuity 也不是目前證實已整合的 runtime 能力。
 
 ## 1. 設計目標
 
