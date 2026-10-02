@@ -90,3 +90,100 @@ timeline:
     text: Find a quiet lunch place
     requestedByRole: center
     expectedAvailability: cloud
+expected:
+  initialState:
+    fields:
+      - path: /journey/stops
+        equals: []
+  finalState:
+    fields:
+      - path: /journey/stops/0/stopId
+        equals: phase10-existing-stop
+      - path: /journey/stops/0/placeId
+        equals: sim:existing-stop
+      - path: /connectivity/mode
+        equals: online
+      - path: /activeProposals/0/status
+        equals: completed
+      - path: /activeProposals/2/proposalId
+        equals: phase10-pending-setting-consent
+      - path: /activeProposals/2/status
+        equals: awaiting_consent
+      - path: /activeProposals/3/kind
+        equals: CHANGE_CABIN_SETTING
+      - path: /activeProposals/3/status
+        equals: awaiting_consent
+  commands:
+    - stepId: seed-journey-stop
+      status: RECEIVED
+      reasonCode: DRIVER_LOAD_NOT_REPORTED_ROUTE_TO_TARGET
+    - stepId: approve-journey-stop
+      status: RECEIVED
+      reasonCode: JOURNEY_STOP_ADDED
+    - stepId: seed-pending-governed-proposal
+      status: RECEIVED
+      reasonCode: DRIVER_LOAD_NOT_REPORTED_ROUTE_TO_TARGET
+  decisions:
+    - stepId: seed-journey-stop
+      proposalId: phase10-existing-stop
+      outcome: ROUTE
+      reasonCode: DRIVER_LOAD_NOT_REPORTED_ROUTE_TO_TARGET
+    - stepId: approve-journey-stop
+      proposalId: phase10-existing-stop
+      outcome: EXECUTE
+      reasonCode: CONSENT_GRANTED_POLICY_REVALIDATED
+    - stepId: online-cloud-route
+      outcome: ROUTE
+      reasonCode: DRIVER_LOAD_NOT_REPORTED_ROUTE_TO_TARGET
+    - stepId: seed-pending-governed-proposal
+      proposalId: phase10-pending-setting-consent
+      outcome: ROUTE
+      reasonCode: DRIVER_LOAD_NOT_REPORTED_ROUTE_TO_TARGET
+    - stepId: offline-local-command
+      outcome: ROUTE
+      reasonCode: DRIVER_LOAD_NOT_REPORTED_ROUTE_TO_TARGET
+    - stepId: online-cloud-recovered
+      outcome: ROUTE
+      reasonCode: DRIVER_LOAD_NOT_REPORTED_ROUTE_TO_TARGET
+  actions:
+    - stepId: approve-journey-stop
+      proposalId: phase10-existing-stop
+      kind: ADD_TRIP_STOP
+      targetRole: center
+      status: completed
+    - stepId: seed-pending-governed-proposal
+      proposalId: phase10-pending-setting-consent
+      kind: CHANGE_CABIN_SETTING
+      targetRole: center
+      status: awaiting_consent
+    - stepId: online-cloud-route
+      kind: SHOW_INFORMATION
+      targetRole: center
+      status: routed
+    - stepId: offline-local-command
+      kind: CHANGE_CABIN_SETTING
+      targetRole: center
+      status: awaiting_consent
+    - stepId: online-cloud-recovered
+      kind: SHOW_INFORMATION
+      targetRole: center
+      status: routed
+  displays:
+    - displayId: center-main
+      role: center
+      stateFields:
+        - path: /journey/stops/0/placeId
+          equals: sim:existing-stop
+        - path: /connectivity/mode
+          equals: online
+  metrics:
+    - name: completedSteps
+      equals: 9
+    - name: commandReceiptCount
+      equals: 3
+    - name: signalReceiptCount
+      equals: 3
+    - name: policyDecisionCount
+      equals: 6
+    - name: journeyStopCount
+      equals: 1

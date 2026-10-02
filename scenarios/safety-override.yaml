@@ -17,3 +17,31 @@ timeline:
         severity: CRITICAL
         source: obstacle-distance
       confidence: 0.99
+expected:
+  initialState:
+    fields:
+      - path: /activeSafetyWarning
+        equals: null
+      - path: /activeTasks
+        equals: []
+  finalState:
+    fields:
+      - path: /activeSafetyWarning/signalType
+        equals: safety.hazard
+      - path: /activeSafetyWarning/severity
+        equals: critical
+      - path: /activeSafetyWarning/signalId
+        equals: sim:safety-override:critical-hazard
+      - path: /activeTasks/0/taskId
+        equals: passenger-recommendation
+      - path: /activeTasks/0/status
+        equals: interrupted
+      - path: /activeTasks/0/interruptionReason
+        equals: CRITICAL_SAFETY_SIGNAL_LOCAL_OVERRIDE
+  metrics:
+    - name: completedSteps
+      equals: 2
+    - name: signalReceiptCount
+      equals: 1
+    - name: journeyStopCount
+      equals: 0

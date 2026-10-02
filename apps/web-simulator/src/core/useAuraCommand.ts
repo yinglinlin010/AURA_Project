@@ -54,11 +54,14 @@ export interface DiscoveryState {
 export interface SharedSafetyWarning { warningId: string; signalId: string; signalType: string; severity: 'critical'; source: 'sensor' | 'simulated' | 'api' | 'derived' | 'cache'; freshness: 'fresh' | 'cached' | 'stale' | 'unknown'; activatedAt: number; }
 export interface DisplayConnection { status: GatewayStatus; sessionId: string | null; deviceId: string; role: DisplayRole; lastMessage: string; }
 export interface RecommendationProposal { proposalId: string; kind: string; summary: string; targetRole: string; priority: string; requiresConsent: boolean; payload: Record<string, unknown>; }
+export interface RecommendationEvidenceSummary { criterion: string; source: string; sourceLabel: string; observedAt: number; freshness: string; }
+export interface RecommendationOptionSummary { placeId: string; label: string; rationale: string[]; evidence: RecommendationEvidenceSummary[]; }
+export interface RecommendationSummary { score: number; simulated: boolean; evidenceCoverage: number; rationale: string[]; evidence: RecommendationEvidenceSummary[]; wholeJourneyContext: RecommendationEvidenceSummary[]; alternatives: RecommendationOptionSummary[]; }
 export type JourneyRecommendationState =
   | { status: 'idle'; requestId: null; requestText: '' }
   | { status: 'pending'; requestId: string; requestText: string }
-  | { status: 'proposal'; requestId: string; requestText: string; proposal: RecommendationProposal; submissionError?: string }
-  | { status: 'submitted'; requestId: string; requestText: string; proposal: RecommendationProposal; commandId: string }
+  | { status: 'proposal'; requestId: string; requestText: string; proposal: RecommendationProposal; recommendation: RecommendationSummary; submissionError?: string }
+  | { status: 'submitted'; requestId: string; requestText: string; proposal: RecommendationProposal; recommendation: RecommendationSummary; commandId: string }
   | { status: 'abstained'; requestId: string; requestText: string; reasonCode: string }
   | { status: 'error'; requestId: string | null; requestText: string; errorCode: string; message: string };
 export interface GatewayState {
@@ -272,8 +275,10 @@ export function useAuraCommand() {
             } else if (data.status === 'proposal' && data.centerProposal &&
               typeof data.centerProposal.proposalId === 'string' && data.centerProposal.kind === 'ADD_TRIP_STOP' &&
               data.centerProposal.targetRole === 'center' && data.centerProposal.requiresConsent === true &&
-              typeof data.centerProposal.summary === 'string' && data.centerProposal.payload && typeof data.centerProposal.payload === 'object') {
-              setRecommendation({ status: 'proposal', requestId: data.requestId, requestText: recommendationTextRef.current, proposal: data.centerProposal });
+              typeof data.centerProposal.summary === 'string' && data.centerProposal.payload && typeof data.centerProposal.payload === 'object' &&
+              data.recommendation && typeof data.recommendation === 'object' && Array.isArray(data.recommendation.rationale) &&
+              Array.isArray(data.recommendation.evidence) && Array.isArray(data.recommendation.wholeJourneyContext) && Array.isArray(data.recommendation.alternatives)) {
+              setRecommendation({ status: 'proposal', requestId: data.requestId, requestText: recommendationTextRef.current, proposal: data.centerProposal, recommendation: data.recommendation });
             } else {
               setRecommendation({ status: 'error', requestId: data.requestId, requestText: recommendationTextRef.current, errorCode: 'INVALID_RECOMMENDATION_RESULT', message: 'The Gateway returned a recommendation response that does not include a consent-required Center proposal.' });
             }
@@ -301,7 +306,7 @@ export function useAuraCommand() {
             setConnection({ lastMessage: `Command ${receipt?.status ?? 'acknowledged'}${receipt?.reasonCode ? ` · ${receipt.reasonCode}` : ''}` });
             const pendingRecommendation = recommendationStateRef.current;
             if (registration.displayId === 'center-main' && receipt?.status === 'REJECTED' && pendingRecommendation.status === 'submitted' && receipt.commandId === pendingRecommendation.commandId) {
-              setRecommendation({ status: 'proposal', requestId: pendingRecommendation.requestId, requestText: pendingRecommendation.requestText, proposal: pendingRecommendation.proposal, submissionError: receipt.reasonCode ?? 'ACTION_PROPOSAL_REJECTED' });
+              setRecommendation({ status: 'proposal', requestId: pendingRecommendation.requestId, requestText: pendingRecommendation.requestText, proposal: pendingRecommendation.proposal, recommendation: pendingRecommendation.recommendation, submissionError: receipt.reasonCode ?? 'ACTION_PROPOSAL_REJECTED' });
             }
           } else if (data.kind === 'error') {
             setConnection({ ...(data.code === 'DISPLAY_REGISTRATION_REJECTED' ? { status: 'error' as const } : {}), lastMessage: `${data.code}: ${data.message}` });
@@ -588,7 +593,7 @@ export function useAuraCommand() {
     if (recommendation.status !== 'proposal' || recommendation.proposal.proposalId !== proposal.proposalId) return false;
     let commandId = '';
     const sent = sendCommand('center-main', { type: 'action.propose', payload: { proposal } }, (id) => { commandId = id; });
-    if (sent) setRecommendation({ status: 'submitted', requestId: recommendation.requestId, requestText: recommendation.requestText, proposal, commandId });
+    if (sent) setRecommendation({ status: 'submitted', requestId: recommendation.requestId, requestText: recommendation.requestText, proposal, recommendation: recommendation.recommendation, commandId });
     return sent;
   }, [recommendation, sendCommand]);
 

@@ -57,3 +57,90 @@ timeline:
     command:
       type: action.consent
       payload: { proposalId: m5-consent-offer, decision: approve }
+expected:
+  initialState:
+    fields:
+      - path: /journey/stops
+        equals: []
+      - path: /activeSafetyWarning
+        equals: null
+  finalState:
+    fields:
+      - path: /activeProposals/0/proposalId
+        equals: m5-decline-offer
+      - path: /activeProposals/0/status
+        equals: declined
+      - path: /activeProposals/1/proposalId
+        equals: m5-consent-offer
+      - path: /activeProposals/1/status
+        equals: executing
+      - path: /activeProposals/1/consentGranted
+        equals: true
+      - path: /activeProposals/1/payload/guidanceMode
+        equals: simulator_only
+      - path: /activeProposals/1/payload/vehicleControlAllowed
+        equals: false
+      - path: /activeTasks/0/status
+        equals: running
+      - path: /journey/stops
+        equals: []
+  commands:
+    - stepId: driver-declines
+      status: RECEIVED
+      reasonCode: TARGET_ROLE_DECLINED
+    - stepId: driver-consents-to-simulator-guidance
+      status: RECEIVED
+      reasonCode: TARGET_ROLE_APPROVED
+  decisions:
+    - stepId: simulated-offer-decline
+      proposalId: m5-decline-offer
+      outcome: DEFER
+      reasonCode: DRIVER_COGNITIVE_LOAD_HIGH
+      consentRequired: true
+    - stepId: load-normal-release-decline
+      proposalId: m5-decline-offer
+      outcome: ROUTE
+      reasonCode: DRIVER_LOAD_BELOW_DEFERRAL_THRESHOLD
+    - stepId: simulated-offer-consent
+      proposalId: m5-consent-offer
+      outcome: DEFER
+      reasonCode: DRIVER_COGNITIVE_LOAD_HIGH
+      consentRequired: true
+    - stepId: load-low-release-consent
+      proposalId: m5-consent-offer
+      outcome: ROUTE
+      reasonCode: DRIVER_LOAD_BELOW_DEFERRAL_THRESHOLD
+    - stepId: driver-consents-to-simulator-guidance
+      proposalId: m5-consent-offer
+      outcome: EXECUTE
+      reasonCode: CONSENT_GRANTED_POLICY_REVALIDATED
+  actions:
+    - stepId: driver-declines
+      proposalId: m5-decline-offer
+      kind: SHOW_GUIDANCE
+      targetRole: center
+      status: declined
+    - stepId: driver-consents-to-simulator-guidance
+      proposalId: m5-consent-offer
+      kind: SHOW_GUIDANCE
+      targetRole: center
+      status: executing
+  displays:
+    - displayId: center-main
+      role: center
+      stateFields:
+        - path: /activeProposals/0/status
+          equals: declined
+        - path: /activeProposals/1/payload/vehicleControlAllowed
+          equals: false
+  metrics:
+    - name: completedSteps
+      equals: 8
+    - name: commandReceiptCount
+      equals: 2
+    - name: signalReceiptCount
+      equals: 4
+    - name: policyDecisionCount
+      equals: 5
+    - name: journeyStopCount
+      equals: 0

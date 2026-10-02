@@ -2108,7 +2108,32 @@
         "source": {"enum": ["sensor", "simulated", "api", "derived", "cache"]},
         "sourceLabel": {"type": "string", "minLength": 1, "maxLength": 128},
         "observedAt": {"type": "integer", "minimum": 0},
-        "freshness": {"enum": ["fresh", "cached"]}
+        "freshness": {"enum": ["fresh", "cached", "stale", "unknown"]}
+      },
+      "additionalProperties": false
+    },
+    "journeyRecommendationOptionSummary": {
+      "type": "object",
+      "required": ["placeId", "label", "rationale", "evidence"],
+      "properties": {
+        "placeId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "label": {"type": "string", "minLength": 1, "maxLength": 256},
+        "rationale": {"type": "array", "maxItems": 12, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+        "evidence": {"type": "array", "items": {"$ref": "#/definitions/journeyEvidenceSummary"}}
+      },
+      "additionalProperties": false
+    },
+    "journeyRecommendationSummary": {
+      "type": "object",
+      "required": ["score", "simulated", "evidenceCoverage", "rationale", "evidence", "wholeJourneyContext", "alternatives"],
+      "properties": {
+        "score": {"type": "number"},
+        "simulated": {"type": "boolean"},
+        "evidenceCoverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "rationale": {"type": "array", "minItems": 1, "maxItems": 12, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+        "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/journeyEvidenceSummary"}},
+        "wholeJourneyContext": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/definitions/journeyEvidenceSummary"}},
+        "alternatives": {"type": "array", "maxItems": 50, "items": {"$ref": "#/definitions/journeyRecommendationOptionSummary"}}
       },
       "additionalProperties": false
     },
@@ -2124,24 +2149,11 @@
         "requiresConsent": {"const": true},
         "payload": {
           "type": "object",
-          "required": ["placeId", "label", "category", "recommendation"],
+          "required": ["placeId", "label", "category"],
           "properties": {
             "placeId": {"type": "string", "minLength": 1, "maxLength": 256},
             "label": {"type": "string", "minLength": 1, "maxLength": 256},
-            "category": {"type": "string", "minLength": 1, "maxLength": 128},
-            "recommendation": {
-              "type": "object",
-              "required": ["score", "simulated", "evidenceCoverage", "rationale", "evidence", "wholeJourneyContext"],
-              "properties": {
-                "score": {"type": "number"},
-                "simulated": {"type": "boolean"},
-                "evidenceCoverage": {"type": "number", "minimum": 0, "maximum": 1},
-                "rationale": {"type": "array", "minItems": 1, "maxItems": 12, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
-                "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/journeyEvidenceSummary"}},
-                "wholeJourneyContext": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/definitions/journeyEvidenceSummary"}}
-              },
-              "additionalProperties": false
-            }
+            "category": {"type": "string", "minLength": 1, "maxLength": 128}
           },
           "additionalProperties": false
         }
@@ -2158,18 +2170,19 @@
         "traceId": {"$ref": "#/definitions/id"},
         "status": {"enum": ["proposal", "abstained"]},
         "reasonCode": {"type": "string", "minLength": 1, "maxLength": 96},
-        "centerProposal": {"$ref": "#/definitions/journeyRecommendationCenterProposal"}
+        "centerProposal": {"$ref": "#/definitions/journeyRecommendationCenterProposal"},
+        "recommendation": {"$ref": "#/definitions/journeyRecommendationSummary"}
       },
       "oneOf": [
         {
-          "required": ["centerProposal"],
+          "required": ["centerProposal", "recommendation"],
           "properties": {"status": {"const": "proposal"}},
           "not": {"required": ["reasonCode"]}
         },
         {
           "required": ["reasonCode"],
           "properties": {"status": {"const": "abstained"}},
-          "not": {"required": ["centerProposal"]}
+          "not": {"anyOf": [{"required": ["centerProposal"]}, {"required": ["recommendation"]}]}
         }
       ],
       "additionalProperties": false

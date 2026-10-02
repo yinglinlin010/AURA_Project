@@ -145,21 +145,32 @@ export class OpenMeteoWeatherAdapter {
     const traceId = input.traceId ?? randomUUID();
     try {
       if (!Number.isInteger(hours) || hours < 1 || hours > 168) throw new Error("INVALID_FORECAST_HOURS");
-      const forecastDays = Math.min(7, Math.ceil(hours / 24));
+      // Open-Meteo's hourly series starts at 00:00 UTC for the current day.
+      // Fetch an extra day so filtering elapsed hours still leaves the full requested window.
+      const forecastDays = Math.min(16, Math.ceil(hours / 24) + 1);
       const url = this.createUrl(input, forecastDays);
       const root = await this.fetchForecast(url, input.signal);
       validateWeatherUnits(root);
       const hourly = normalizeHourly(root.hourly);
-      const observations = hourly.time.slice(0, hours).map((time, index) => this.createObservation({
-        observedAt: this.now(),
-        validAt: parseTime(time),
+      const retrievedAt = this.now();
+      const currentHour = Math.floor(retrievedAt / 3_600_000) * 3_600_000;
+      const futureIndexes = hourly.time
+        .map((time, index) => ({ validAt: parseTime(time), index }))
+        .filter(({ validAt }) => validAt >= currentHour)
+        .slice(0, hours);
+      if (futureIndexes.length !== hours || futureIndexes.some((item, index) =>
+        index > 0 && item.validAt - futureIndexes[index - 1]!.validAt !== 60 * 60 * 1000)) {
+        throw new Error("OPEN_METEO_FORECAST_WINDOW_INCOMPLETE");
+      }
+      const observations = futureIndexes.map(({ validAt, index }) => this.createObservation({
+        observedAt: retrievedAt,
+        validAt,
         temperatureCelsius: requireNumber(hourly.temperature_2m[index], "OPEN_METEO_HOURLY_RESPONSE_INVALID", { minimum: -100, maximum: 70 }),
         weatherCode: requireNumber(hourly.weather_code[index], "OPEN_METEO_HOURLY_RESPONSE_INVALID", { integer: true, minimum: 0, maximum: 99 }),
         precipitationMillimeters: requireNumber(hourly.precipitation[index], "OPEN_METEO_HOURLY_RESPONSE_INVALID", { minimum: 0, maximum: 1000 }),
         precipitationProbability: normalizeProbability(hourly.precipitation_probability[index]),
         freshness: "fresh",
       }));
-      if (observations.length === 0) throw new Error("OPEN_METEO_HOURLY_RESPONSE_INVALID");
       this.recordObservation(traceId, observations[0]!, startedAt, "forecast");
       return observations;
     } catch (error) {

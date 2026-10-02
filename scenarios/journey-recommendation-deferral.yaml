@@ -47,3 +47,71 @@ timeline:
       payload:
         proposalId: journey-stop-001
         decision: approve
+expected:
+  initialState:
+    fields:
+      - path: /journey/stops
+        equals: []
+      - path: /activeSafetyWarning
+        equals: null
+  finalState:
+    fields:
+      - path: /journey/stops/0/stopId
+        equals: journey-stop-001
+      - path: /journey/stops/0/placeId
+        equals: garden-cafe
+      - path: /activeProposals/0/status
+        equals: completed
+      - path: /activeProposals/0/consentGranted
+        equals: true
+      - path: /driver/currentLoad
+        equals: low
+  commands:
+    - stepId: rear-proposes-ranked-stop
+      status: RECEIVED
+      reasonCode: DRIVER_COGNITIVE_LOAD_HIGH
+    - stepId: center-approves
+      status: RECEIVED
+      reasonCode: JOURNEY_STOP_ADDED
+  decisions:
+    - stepId: rear-proposes-ranked-stop
+      proposalId: journey-stop-001
+      outcome: DEFER
+      reasonCode: DRIVER_COGNITIVE_LOAD_HIGH
+      consentRequired: true
+    - stepId: driver-load-drops
+      proposalId: journey-stop-001
+      outcome: ROUTE
+      reasonCode: DRIVER_LOAD_BELOW_DEFERRAL_THRESHOLD
+    - stepId: center-approves
+      proposalId: journey-stop-001
+      outcome: EXECUTE
+      reasonCode: CONSENT_GRANTED_POLICY_REVALIDATED
+  actions:
+    - stepId: rear-proposes-ranked-stop
+      proposalId: journey-stop-001
+      kind: ADD_TRIP_STOP
+      targetRole: center
+      status: deferred
+    - stepId: center-approves
+      proposalId: journey-stop-001
+      kind: ADD_TRIP_STOP
+      targetRole: center
+      status: completed
+  displays:
+    - displayId: center-main
+      role: center
+      stateFields:
+        - path: /journey/stops/0/placeId
+          equals: garden-cafe
+  metrics:
+    - name: completedSteps
+      equals: 4
+    - name: commandReceiptCount
+      equals: 2
+    - name: signalReceiptCount
+      equals: 2
+    - name: policyDecisionCount
+      equals: 3
+    - name: journeyStopCount
+      equals: 1

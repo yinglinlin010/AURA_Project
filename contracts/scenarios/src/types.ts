@@ -1,8 +1,57 @@
-import type { AuraCommand, CognitiveLoadLevel, Gear, PolicyOutcome, ProposalPriority, VehicleState } from "../../protocol/src/types.js";
+import type { ActionKind, AuraCommand, CognitiveLoadLevel, DisplayRole, Gear, PolicyOutcome, ProposalPriority, ProposalStatus, VehicleState } from "../../protocol/src/types.js";
 
 export type ScenarioVoiceState = "IDLE" | "LISTENING" | "TRANSCRIBING" | "THINKING" | "SPEAKING";
 
+export interface ScenarioStateFieldExpectation {
+  /** JSON Pointer into AuraSharedState, for example `/journey/stops/0/placeId`. */
+  path: string;
+  equals: unknown;
+}
+
+export type ScenarioMetricName =
+  | "completedSteps"
+  | "commandReceiptCount"
+  | "signalReceiptCount"
+  | "policyDecisionCount"
+  | "journeyStopCount"
+  | "voiceTransitionCount"
+  | "stateRevision"
+  | "durationMs";
+
 export interface ScenarioExpected {
+  initialState?: { fields: ScenarioStateFieldExpectation[] };
+  finalState?: { fields: ScenarioStateFieldExpectation[] };
+  commands?: Array<{
+    stepId: string;
+    status: "RECEIVED" | "REJECTED";
+    reasonCode?: string;
+  }>;
+  decisions?: Array<{
+    stepId: string;
+    outcome: PolicyOutcome;
+    proposalId?: string;
+    reasonCode?: string;
+    consentRequired?: boolean;
+  }>;
+  actions?: Array<{
+    stepId: string;
+    proposalId?: string;
+    proposalAlias?: string;
+    kind?: ActionKind;
+    targetRole?: DisplayRole;
+    status?: ProposalStatus;
+  }>;
+  displays?: Array<{
+    displayId: string;
+    role?: DisplayRole;
+    stateFields?: ScenarioStateFieldExpectation[];
+  }>;
+  metrics?: Array<{
+    name: ScenarioMetricName;
+    equals?: number;
+    min?: number;
+    max?: number;
+  }>;
   voice?: {
     policyDecisions?: Array<{
       stepId: string;

@@ -72,6 +72,7 @@
 .center-device.load-critical .gateway-display-error { visibility: hidden; }
 .center-device.load-critical .proposal-panel,
 .center-device.load-critical .deferred-proposal-indicator { display: none; }
+.center-device.load-critical .recommendation-tools { display: none; }
 .center-device.safety-active .journey-column,
 .center-device.safety-active .center-main > .device-status,
 .center-device.safety-active .route-summary,
@@ -99,14 +100,18 @@
 .journey-stop.destination { margin-top: auto; }
 .center-main { position: relative; min-width: 0; display: flex; flex-direction: column; padding: 8px 11px 9px; background: #202022; }
 .device-status { gap: 7px; min-height: 15px; color: #bcbcc0; font-size: clamp(7px, .68vw, 10px); }
+.status-source { padding: 2px 4px; color: #f0c59d; border: 1px solid #765338; font-size: 7px; font-weight: 700; letter-spacing: .06em; }
 .status-spacer { flex: 1; }
 .battery { width: 19px; height: 9px; padding: 1px; border: 1px solid #c7c7c9; border-radius: 2px; }.battery::after { position: absolute; width: 2px; height: 4px; margin: 1px 0 0 2px; background: #c7c7c9; content: ''; }.battery > i { display: block; width: 78%; height: 100%; background: #dedee0; }
-.route-summary { display: grid; grid-template-columns: repeat(3, 1fr); min-height: 42px; border-bottom: 1px solid var(--line); }
+.route-summary { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); min-height: 50px; padding-top: 8px; border-bottom: 1px solid var(--line); }
 .route-summary > div { display: grid; grid-template-columns: auto 1fr; align-content: center; column-gap: 5px; padding-left: 6px; color: #e6e6e8; border-left: 1px solid var(--line); }
 .route-summary > div:first-child { border: 0; }
 .route-summary svg { grid-row: span 2; align-self: center; color: #bcbcc0; }
 .route-summary b { font-size: clamp(8px, .82vw, 12px); font-weight: 600; text-transform: uppercase; }.route-summary span { color: #b9b9bd; font-size: clamp(7px, .68vw, 10px); text-transform: uppercase; }
 .map-wrap { position: relative; min-height: 0; flex: 1; overflow: hidden; }
+.map-source-label, .route-source-label { color: #f0c59d; background: rgba(28,28,30,.9); border: 1px solid #765338; font-size: 7px; font-weight: 700; letter-spacing: .06em; }
+.map-source-label { position: absolute; z-index: 1; top: 6px; right: 6px; padding: 3px 5px; }
+.route-source-label { position: absolute; z-index: 1; top: 2px; right: 4px; padding: 2px 4px; }
 .route-map { display: block; width: 100%; height: 100%; }
 .map-label, .road-label { position: absolute; padding: 2px 4px; color: #f2f2f2; background: rgba(28,28,30,.83); font-size: clamp(7px, .8vw, 12px); font-weight: 700; }
 .munich-label { bottom: 14%; left: 8%; }.stuttgart-label { top: 17%; right: 8%; }.road-label { top: 40%; left: 48%; }
@@ -196,6 +201,7 @@
 .connection-message { grid-column: 1 / -1; }
 .passenger-proposal-status { padding: 5px 8px; color: #ddd; background: #28282a; border-top: 1px solid var(--line); font-size: 8px; }.passenger-proposal-status.gateway-error, .gateway-display-error { color: #ffaaa2; }.gateway-display-error { position: absolute; z-index: 3; top: 32px; right: 10px; left: 10px; padding: 6px 8px; background: #422c2b; border: 1px solid #87504b; font-size: 9px; }
 .display-connection { display: block; margin-top: 4px; color: #a7a7ab; font-size: 8px; font-weight: 500; letter-spacing: .06em; }.display-connection.connected { color: #9ad19d; }.display-connection.error, .display-connection.disconnected { color: #ff9a91; }
+.journey-source-label { display: inline-block; margin-top: 5px; padding: 2px 4px; color: #f0c59d; background: #292522; border: 1px solid #765338; font-size: 7px; font-weight: 700; letter-spacing: .06em; }
 
 /* Center recommendation stays within the route/map task area. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }

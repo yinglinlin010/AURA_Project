@@ -29,7 +29,7 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
 }
 
 function StatusBar({ time = '16:03' }: { time?: string }) {
-  return <div className="device-status"><span>{time}</span><span>21°C</span><span className="status-spacer" /><span>5G</span><Icon name="signal" size={15} /><span className="battery"><i /></span></div>;
+  return <div className="device-status" aria-label="Simulated status bar: time and temperature are examples; connectivity icons are illustrative"><span>{time}</span><span>21°C</span><span className="status-source">SIMULATED</span><span className="status-spacer" /><span>5G</span><Icon name="signal" size={15} /><span className="battery"><i /></span></div>;
 }
 
 function Cluster({ speedKph, warning }: { speedKph: number; warning: SharedSafetyWarning | null }) {
@@ -68,7 +68,7 @@ function proposalStateLabel(proposal: SharedProposal) {
   if (proposal.status === 'awaiting_consent') return 'Awaiting driver approval';
   if (proposal.status === 'completed') return proposal.kind === 'SHOW_GUIDANCE' ? 'Simulator guidance shown · no vehicle control' : 'Added to journey';
   if (proposal.status === 'executing' && proposal.kind === 'SHOW_GUIDANCE') return 'Simulator guidance enabled · no vehicle control';
-  if (proposal.status === 'declined') return 'Declined by driver';
+  if (proposal.status === 'declined') return 'Declined by driver · journey unchanged';
   if (proposal.status === 'interrupted') return 'Interrupted · safety event took priority';
   return `${proposal.status}${proposal.lastReasonCode ? ` · ${proposal.lastReasonCode}` : ''}`;
 }
@@ -93,10 +93,10 @@ function RecommendationResult({ recommendation, proposals, onSubmit }: { recomme
   if (recommendation.status === 'error') return <div className="recommendation-message failed" role="alert"><b>Recommendation request failed</b><span>{recommendation.message}</span><small>{recommendation.errorCode}</small></div>;
 
   const proposal = recommendation.proposal;
-  const details = proposal.payload.recommendation as Record<string, unknown> | undefined;
-  const rationale = Array.isArray(details?.rationale) ? details.rationale.filter((item): item is string => typeof item === 'string') : [];
-  const evidence = Array.isArray(details?.evidence) ? details.evidence as Array<Record<string, unknown>> : [];
-  const context = Array.isArray(details?.wholeJourneyContext) ? details.wholeJourneyContext as Array<Record<string, unknown>> : [];
+  const details = recommendation.recommendation;
+  const rationale = details.rationale;
+  const evidence = details.evidence as unknown as Array<Record<string, unknown>>;
+  const context = details.wholeJourneyContext as unknown as Array<Record<string, unknown>>;
   const sourceSummary = [...evidence, ...context].map((item) => `${String(item.sourceLabel ?? item.source ?? 'Unknown source')} · ${String(item.freshness ?? 'unknown')}`).filter((value, index, all) => all.indexOf(value) === index).join(' / ');
   const submittedProposal = proposals.find((item) => item.proposalId === proposal.proposalId);
   const submittedState = recommendation.status === 'submitted'
@@ -119,6 +119,7 @@ function RecommendationResult({ recommendation, proposals, onSubmit }: { recomme
           {rationale.length > 1 && <ul>{rationale.slice(1).map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>}
           <div className="recommendation-evidence-group"><b>Recommendation factors</b>{evidence.length ? <ul>{evidence.map((item, index) => <li key={`${String(item.criterion)}-${index}`}>{formatEvidence(item)}</li>)}</ul> : <p>No factor provenance was returned.</p>}</div>
           <div className="recommendation-evidence-group"><b>Whole journey context</b>{context.length ? <ul>{context.map((item, index) => <li key={`${String(item.criterion)}-${index}`}>{formatEvidence(item)}</li>)}</ul> : <p>No whole-journey provenance was returned.</p>}</div>
+          {details.alternatives.length > 0 && <div className="recommendation-evidence-group"><b>Other options considered</b><ul>{details.alternatives.map((option) => <li key={option.placeId}><b>{option.label}</b>{option.rationale.length > 0 && <span> — {option.rationale.join(' ')}</span>}{option.evidence.length > 0 && <ul>{option.evidence.map((item, index) => <li key={`${item.criterion}-${index}`}>{formatEvidence(item as unknown as Record<string, unknown>)}</li>)}</ul>}</li>)}</ul></div>}
         </details>
         <button className="recommendation-submit" onClick={() => onSubmit(proposal)}>Send to driver approval</button>
       </>}
@@ -138,7 +139,7 @@ function CenterDisplay({ proposals, journeyStops, connection, load, warning, rec
   const recommendationBusy = recommendation.status === 'pending' || (recommendation.status === 'submitted' && (!submittedProposal || !['completed', 'declined', 'rejected', 'cancelled', 'interrupted'].includes(submittedProposal.status)));
   return <section className={`device center-device ${load === 'high' ? 'load-high' : ''} ${load === 'critical' ? 'load-critical' : ''} ${warning ? 'safety-active' : ''}`} aria-label="Center display preview">
     <aside className="journey-column">
-      <h2>Journey <small className={`display-connection ${connection.status}`}>Gateway {connection.status}</small></h2>
+      <h2>Journey <small className="journey-source-label">SIMULATED SCENARIO</small><small className={`display-connection ${connection.status}`}>Gateway {connection.status}</small></h2>
       <div className="journey-timeline">
         <div className="journey-stop done"><time>14:32</time><i/><div><b>Munich</b><span>Origin · departed</span></div></div>
         <div className="journey-stop"><time>15:45</time><i/><div><b>Dinner <small>Reservation</small></b><span>Hotel Ambra · 12 min stop</span></div></div>
@@ -150,14 +151,14 @@ function CenterDisplay({ proposals, journeyStops, connection, load, warning, rec
     </aside>
     <div className="center-main"><StatusBar />
       {warning && <div className="center-safety-warning" role="alert" aria-live="assertive"><span>CRITICAL SAFETY WARNING</span><b>Immediate safety condition detected</b><small>{warning.source === 'simulated' ? 'SIMULATED' : warning.source.toUpperCase()} · {warning.freshness.toUpperCase()} signal · active since {new Date(warning.activatedAt).toLocaleTimeString()}</small></div>}
-      <div className="route-summary"><div><Icon name="route"/><b>98 km</b><span>to destination</span></div><div><Icon name="settings"/><b>64 min</b><span>ETA 19:32</span></div><div><Icon name="next"/><b>Currently</b><span>on A–8</span></div></div>
-      <div className="map-wrap"><RouteMap /><span className="map-label munich-label">MUNICH</span><span className="map-label stuttgart-label">STUTTGART</span><span className="road-label">A–8</span>
+      <div className="route-summary"><div><Icon name="route"/><b>98 km</b><span>to destination</span></div><div><Icon name="settings"/><b>64 min</b><span>ETA 19:32</span></div><div><Icon name="next"/><b>Currently</b><span>on A–8</span></div><small className="route-source-label">SIMULATED ROUTE VALUES</small></div>
+      <div className="map-wrap"><RouteMap /><span className="map-source-label">SIMULATED ROUTE</span><span className="map-label munich-label">MUNICH</span><span className="map-label stuttgart-label">STUTTGART</span><span className="road-label">A–8</span>
         <div className="recommendation-tools">
-          <form className="recommendation-form" onSubmit={(event) => { event.preventDefault(); if (onRecommendationRequest(recommendationText)) setRecommendationText(''); }}>
+          {!recommendationUnavailable && <form className="recommendation-form" onSubmit={(event) => { event.preventDefault(); if (onRecommendationRequest(recommendationText)) setRecommendationText(''); }}>
             <label className="sr-only" htmlFor="journey-recommendation-request">Ask for a whole-journey recommendation</label>
-            <input id="journey-recommendation-request" value={recommendationText} maxLength={1000} disabled={recommendationUnavailable || recommendationBusy} onChange={(event) => setRecommendationText(event.target.value)} placeholder="Ask about this journey… e.g. a quick dinner stop" />
-            <button type="submit" disabled={recommendationUnavailable || recommendationBusy || !recommendationText.trim()}>Recommend</button>
-          </form>
+            <input id="journey-recommendation-request" value={recommendationText} maxLength={1000} disabled={recommendationBusy} onChange={(event) => setRecommendationText(event.target.value)} placeholder="Ask about this journey… e.g. a quick dinner stop" />
+            <button type="submit" disabled={recommendationBusy || !recommendationText.trim()}>Recommend</button>
+          </form>}
           {load === null && !warning && <span className="recommendation-paused" role="status">Waiting for a current driver-load state before showing journey suggestions.</span>}
           {(load === 'high' || load === 'critical') && !warning && <span className="recommendation-paused" role="status">Paused while driver attention is needed.</span>}
           {recommendation.status === 'pending' && proposalDetailsVisible && !warning && <span className="recommendation-pending" role="status">Checking current journey evidence…</span>}

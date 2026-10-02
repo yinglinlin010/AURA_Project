@@ -45,3 +45,54 @@ timeline:
       payload:
         proposalId: rear-stop-001
         decision: approve
+expected:
+  initialState:
+    fields:
+      - path: /journey/stops
+        equals: []
+  finalState:
+    fields:
+      - path: /journey/stops/0/placeId
+        equals: demo-cafe
+  commands:
+    - stepId: rear-proposes-stop
+      status: RECEIVED
+      reasonCode: DRIVER_COGNITIVE_LOAD_HIGH
+    - stepId: center-approves
+      status: RECEIVED
+      reasonCode: JOURNEY_STOP_ADDED
+  decisions:
+    - stepId: rear-proposes-stop
+      proposalId: rear-stop-001
+      outcome: DEFER
+      reasonCode: DRIVER_COGNITIVE_LOAD_HIGH
+      consentRequired: true
+    - stepId: driver-load-drops
+      proposalId: rear-stop-001
+      outcome: ROUTE
+      reasonCode: DRIVER_LOAD_BELOW_DEFERRAL_THRESHOLD
+    - stepId: center-approves
+      proposalId: rear-stop-001
+      outcome: EXECUTE
+      reasonCode: CONSENT_GRANTED_POLICY_REVALIDATED
+  actions:
+    - stepId: center-approves
+      proposalId: rear-stop-001
+      kind: ADD_TRIP_STOP
+      targetRole: center
+      status: completed
+  displays:
+    - displayId: center-main
+      role: center
+      stateFields:
+        - path: /journey/stops/0/placeId
+          equals: demo-cafe
+  metrics:
+    - name: completedSteps
+      equals: 4
+    - name: commandReceiptCount
+      equals: 2
+    - name: signalReceiptCount
+      equals: 2
+    - name: journeyStopCount
+      equals: 1

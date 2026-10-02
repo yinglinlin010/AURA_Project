@@ -9,8 +9,9 @@ import type {
   ContextIngestReceipt,
   ContextSignal,
   DisplayRegistry,
+  PolicyDecision,
 } from "../../../contracts/protocol/src/types.js";
-import type { ScenarioDefinition, ScenarioExpected, ScenarioStep, ScenarioVoiceState } from "../../../contracts/scenarios/src/types.js";
+import type { ScenarioDefinition, ScenarioExpected, ScenarioMetricName, ScenarioStateFieldExpectation, ScenarioStep, ScenarioVoiceState } from "../../../contracts/scenarios/src/types.js";
 import { CoreRuntime } from "../../../packages/core-runtime/src/index.js";
 import type { IntelligenceRouter } from "../../../packages/core-runtime/src/intelligence-router.js";
 import type { VoiceRuntime, VoiceRuntimeEvent, VoiceRuntimeState } from "../../../packages/core-runtime/src/voice-runtime.js";
@@ -34,6 +35,7 @@ export interface ScenarioRunResult {
   finishedAt: number;
   completedSteps: number;
   commandReceipts: CommandReceipt[];
+  decisionObservations: Array<{ stepId: string; decision: PolicyDecision }>;
   signalReceipts: ContextIngestReceipt[];
   connectivityTransitions: Array<{
     stepId: string;
@@ -68,6 +70,8 @@ export interface ScenarioRunResult {
     currentLoad?: string;
     proposals: Array<{
       proposalId: string;
+      kind: string;
+      targetRole: string;
       status: string;
       consentGranted?: boolean;
       lastReasonCode?: string;
@@ -117,7 +121,10 @@ export class ScenarioRunner {
 
   async run(scenario: ScenarioDefinition, startedAt = this.now()): Promise<ScenarioRunResult> {
     assertScenarioDefinition(scenario);
+    const initialSharedState = this.runtime.getState();
     const commandReceipts: CommandReceipt[] = [];
+    const commandReceiptsByStep = new Map<string, CommandReceipt>();
+    const decisionObservations: ScenarioRunResult["decisionObservations"] = [];
     const signalReceipts: ContextIngestReceipt[] = [];
     const connectivityTransitions: ScenarioRunResult["connectivityTransitions"] = [];
     const routingObservations: ScenarioRunResult["routingObservations"] = [];
@@ -135,8 +142,9 @@ export class ScenarioRunner {
     const traceId = `scenario:${scenario.id}`;
 
     try {
-    for (const step of timeline) {
+      for (const step of timeline) {
       await this.sleepUntil(startedAt + step.atMs * this.timeScale);
+      const stepSequenceBefore = this.runtime.eventBus.sequence;
       if (step.kind === "signal") {
         const sessionBefore = this.runtime.sessionId;
         const before = step.signal.type === "connectivity.mode" ? this.runtime.getState() : undefined;
@@ -178,8 +186,7 @@ export class ScenarioRunner {
       } else if (step.kind === "command") {
         const display = findEnabledDisplay(this.registry, step.displayId);
         if (!display) throw new Error(`SCENARIO_DISPLAY_NOT_ENABLED:${step.displayId}`);
-        commandReceipts.push(
-          this.runtime.submitCommand({
+        const receipt = this.runtime.submitCommand({
             protocolVersion: PROTOCOL_VERSION,
             kind: "command",
             messageId: `sim:${scenario.id}:${step.id}`,
@@ -189,8 +196,9 @@ export class ScenarioRunner {
             sentAt: startedAt + step.atMs,
             sender: { displayId: display.displayId, deviceId: display.deviceId },
             command: step.command,
-          }),
-        );
+          });
+        commandReceipts.push(receipt);
+        commandReceiptsByStep.set(step.id, receipt);
       } else if (step.kind === "intent") {
         if (!this.router) throw new Error(`SCENARIO_ROUTER_REQUIRED:${step.id}`);
         const sessionIdBefore = this.runtime.sessionId;
@@ -291,6 +299,7 @@ export class ScenarioRunner {
           command: { type: "action.consent", payload: { proposalId, decision: step.decision } },
         });
         commandReceipts.push(consentReceipt);
+        commandReceiptsByStep.set(step.id, consentReceipt);
         const consentEvents = this.runtime.eventBus.eventsAfter(sequenceBefore);
         const consentAccepted = consentEvents.some((event) =>
           event.type === "proposal.consent.recorded" &&
@@ -362,6 +371,11 @@ export class ScenarioRunner {
           traceId,
         });
       }
+      for (const event of this.runtime.eventBus.eventsAfter(stepSequenceBefore)) {
+        if (event.type === "proposal.policy.decided") {
+          decisionObservations.push({ stepId: step.id, decision: structuredClone(event.payload.decision) });
+        }
+      }
       const state = this.runtime.getState();
       proposalLifecycle.push({
         stepId: step.id,
@@ -380,6 +394,8 @@ export class ScenarioRunner {
             : undefined;
           return {
             proposalId: proposal.proposalId,
+            kind: proposal.kind,
+            targetRole: proposal.targetRole,
             status: proposal.status,
             ...(proposal.consentGranted === undefined ? {} : { consentGranted: proposal.consentGranted }),
             ...(proposal.lastReasonCode === undefined ? {} : { lastReasonCode: proposal.lastReasonCode }),
@@ -391,24 +407,37 @@ export class ScenarioRunner {
         stepId: step.id,
         activeWarning: state.activeSafetyWarning ? structuredClone(state.activeSafetyWarning) : null,
       });
-    }
+      }
     } finally {
       unsubscribeVoice?.();
     }
 
-    const expectationResults = assertVoiceExpectations(scenario.expected, {
+    const finishedAt = this.now();
+    const finalSharedState = this.runtime.getState();
+    const expectationResults = assertScenarioExpectations(scenario.expected, {
+      initialSharedState,
+      finalSharedState,
+      commandReceiptsByStep,
+      decisionObservations,
+      proposalLifecycle,
+      proposalAliases,
+      registry: this.registry,
+      runtime: this.runtime,
+      completedSteps: timeline.length,
+      signalReceiptCount: signalReceipts.length,
+      startedAt,
+      finishedAt,
       initialVoiceState,
       voiceEvents,
       voiceStepObservations,
-      proposalAliases,
-      journeyStopIds: this.runtime.getState().journey.stops.map((stop) => stop.stopId),
     });
     return {
       scenarioId: scenario.id,
       startedAt,
-      finishedAt: this.now(),
+      finishedAt,
       completedSteps: timeline.length,
       commandReceipts,
+      decisionObservations,
       signalReceipts,
       connectivityTransitions,
       routingObservations,
@@ -447,6 +476,104 @@ export function assertScenarioDefinition(value: unknown): asserts value is Scena
     if (stepIds.has(step.id)) throw new Error(`DUPLICATE_SCENARIO_STEP_ID:${step.id}`);
     stepIds.add(step.id);
   }
+}
+
+function assertScenarioExpectations(
+  expected: ScenarioExpected | undefined,
+  actual: {
+    initialSharedState: ReturnType<CoreRuntime["getState"]>;
+    finalSharedState: ReturnType<CoreRuntime["getState"]>;
+    commandReceiptsByStep: Map<string, CommandReceipt>;
+    decisionObservations: ScenarioRunResult["decisionObservations"];
+    proposalLifecycle: ScenarioRunResult["proposalLifecycle"];
+    proposalAliases: Map<string, string>;
+    registry: DisplayRegistry;
+    runtime: CoreRuntime;
+    completedSteps: number;
+    signalReceiptCount: number;
+    startedAt: number;
+    finishedAt: number;
+    initialVoiceState: VoiceRuntimeState | null;
+    voiceEvents: VoiceRuntimeEvent[];
+    voiceStepObservations: ScenarioRunResult["voiceStepObservations"];
+  },
+): ScenarioRunResult["expectationResults"] {
+  const results: ScenarioRunResult["expectationResults"] = [];
+  const check = (path: string, wanted: unknown, observed: unknown): void => {
+    if (JSON.stringify(wanted) !== JSON.stringify(observed)) {
+      throw new Error(`SCENARIO_EXPECTATION_FAILED:${path}:expected=${JSON.stringify(wanted)}:actual=${JSON.stringify(observed)}`);
+    }
+    results.push({ path, expected: wanted, actual: observed, passed: true });
+  };
+  const readPointer = (root: unknown, path: string): unknown => {
+    if (path === "") return root;
+    return path.slice(1).split("/").map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"))
+      .reduce<unknown>((value, key) => value !== null && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined, root);
+  };
+  const checkFields = (prefix: string, state: unknown, fields: ScenarioStateFieldExpectation[]): void => {
+    for (const field of fields) check(`${prefix}${field.path}`, field.equals, readPointer(state, field.path));
+  };
+
+  if (expected?.initialState) checkFields("initialState", actual.initialSharedState, expected.initialState.fields);
+  if (expected?.finalState) checkFields("finalState", actual.finalSharedState, expected.finalState.fields);
+  for (const command of expected?.commands ?? []) {
+    const receipt = actual.commandReceiptsByStep.get(command.stepId);
+    check(`commands.${command.stepId}.status`, command.status, receipt?.status);
+    if (command.reasonCode !== undefined) check(`commands.${command.stepId}.reasonCode`, command.reasonCode, receipt?.reasonCode);
+  }
+  for (const decisionExpected of expected?.decisions ?? []) {
+    const decision = actual.decisionObservations.find((item) => item.stepId === decisionExpected.stepId &&
+      (!decisionExpected.proposalId || item.decision.proposalId === decisionExpected.proposalId))?.decision;
+    check(`decisions.${decisionExpected.stepId}.outcome`, decisionExpected.outcome, decision?.outcome);
+    if (decisionExpected.reasonCode !== undefined) check(`decisions.${decisionExpected.stepId}.reasonCode`, decisionExpected.reasonCode, decision?.reasonCode);
+    if (decisionExpected.consentRequired !== undefined) check(`decisions.${decisionExpected.stepId}.consentRequired`, decisionExpected.consentRequired, decision?.consentRequired);
+  }
+  for (const action of expected?.actions ?? []) {
+    const aliasedProposalId = action.proposalAlias ? actual.proposalAliases.get(action.proposalAlias) : undefined;
+    if (action.proposalAlias && !aliasedProposalId) {
+      throw new Error(`SCENARIO_EXPECTATION_FAILED:actions.${action.stepId}.proposalAlias:unknown_alias=${action.proposalAlias}`);
+    }
+    const proposalId = action.proposalId ?? aliasedProposalId;
+    const proposal = actual.proposalLifecycle.find((item) => item.stepId === action.stepId)?.proposals.find((item) =>
+      (!proposalId || item.proposalId === proposalId) && (!action.kind || item.kind === action.kind) && (!action.targetRole || item.targetRole === action.targetRole));
+    if (action.proposalId || action.proposalAlias) check(`actions.${action.stepId}.proposalId`, proposalId, proposal?.proposalId);
+    if (action.kind !== undefined) check(`actions.${action.stepId}.kind`, action.kind, proposal?.kind);
+    if (action.targetRole !== undefined) check(`actions.${action.stepId}.targetRole`, action.targetRole, proposal?.targetRole);
+    if (action.status !== undefined) check(`actions.${action.stepId}.status`, action.status, proposal?.status);
+  }
+  for (const displayExpected of expected?.displays ?? []) {
+    const display = findEnabledDisplay(actual.registry, displayExpected.displayId);
+    check(`displays.${displayExpected.displayId}.enabled`, true, Boolean(display));
+    if (displayExpected.role !== undefined) check(`displays.${displayExpected.displayId}.role`, displayExpected.role, display?.role);
+    if (displayExpected.stateFields) checkFields(`displays.${displayExpected.displayId}.state`, actual.runtime.createSnapshot(displayExpected.displayId).state, displayExpected.stateFields);
+  }
+  const voiceTransitionCount = actual.voiceEvents.filter((event) => event.type === "state").length;
+  const metrics: Record<ScenarioMetricName, number> = {
+    completedSteps: actual.completedSteps,
+    commandReceiptCount: actual.commandReceiptsByStep.size,
+    signalReceiptCount: actual.signalReceiptCount,
+    policyDecisionCount: actual.decisionObservations.length,
+    journeyStopCount: actual.finalSharedState.journey.stops.length,
+    voiceTransitionCount,
+    stateRevision: actual.finalSharedState.revision,
+    durationMs: actual.finishedAt - actual.startedAt,
+  };
+  for (const metric of expected?.metrics ?? []) {
+    const observed = metrics[metric.name];
+    if (metric.equals !== undefined) check(`metrics.${metric.name}.equals`, metric.equals, observed);
+    if (metric.min !== undefined && observed < metric.min) throw new Error(`SCENARIO_EXPECTATION_FAILED:metrics.${metric.name}.min:expected>=${metric.min}:actual=${observed}`);
+    if (metric.min !== undefined) results.push({ path: `metrics.${metric.name}.min`, expected: metric.min, actual: observed, passed: true });
+    if (metric.max !== undefined && observed > metric.max) throw new Error(`SCENARIO_EXPECTATION_FAILED:metrics.${metric.name}.max:expected<=${metric.max}:actual=${observed}`);
+    if (metric.max !== undefined) results.push({ path: `metrics.${metric.name}.max`, expected: metric.max, actual: observed, passed: true });
+  }
+  results.push(...assertVoiceExpectations(expected, {
+    initialVoiceState: actual.initialVoiceState,
+    voiceEvents: actual.voiceEvents,
+    voiceStepObservations: actual.voiceStepObservations,
+    proposalAliases: actual.proposalAliases,
+    journeyStopIds: actual.finalSharedState.journey.stops.map((stop) => stop.stopId),
+  }));
+  return results;
 }
 
 function assertVoiceExpectations(

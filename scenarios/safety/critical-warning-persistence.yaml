@@ -17,3 +17,31 @@ timeline:
         severity: critical
         category: obstacle
       confidence: 1
+expected:
+  initialState:
+    fields:
+      - path: /activeSafetyWarning
+        equals: null
+      - path: /activeTasks
+        equals: []
+  finalState:
+    fields:
+      - path: /activeSafetyWarning/signalType
+        equals: safety.critical
+      - path: /activeSafetyWarning/severity
+        equals: critical
+      - path: /activeSafetyWarning/signalId
+        equals: sim:critical-warning-persistence:critical-safety-signal
+      - path: /activeTasks/0/taskId
+        equals: scenario-secondary-work
+      - path: /activeTasks/0/status
+        equals: interrupted
+      - path: /activeTasks/0/interruptionReason
+        equals: CRITICAL_SAFETY_SIGNAL_LOCAL_OVERRIDE
+  metrics:
+    - name: completedSteps
+      equals: 2
+    - name: signalReceiptCount
+      equals: 1
+    - name: journeyStopCount
+      equals: 0

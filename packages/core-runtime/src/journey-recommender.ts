@@ -76,7 +76,7 @@ export interface JourneyRecommendation {
   simulated: boolean;
   evidenceCoverage: number;
   rationale: string[];
-  alternatives: Array<{ placeId: string; label: string; score: number }>;
+  alternatives: Array<{ placeId: string; label: string; score: number; rationale: string[]; evidence: ReturnType<typeof evidenceSummary> }>;
 }
 
 type ScoredOption = { option: JourneyOption; score: number; rationale: string[]; used: number; simulated: boolean };
@@ -137,7 +137,7 @@ export function scoreJourneyOptions(options: JourneyOption[], now = Date.now()):
       simulated: scored.some((item) => item.simulated),
       evidenceCoverage: 0,
       rationale: ["No fresh or cached evidence was available; no journey recommendation is substantiated."],
-      alternatives: scored.map(({ option, score }) => ({ placeId: option.placeId, label: option.label, score })),
+      alternatives: scored.map(({ option, score, rationale }) => ({ placeId: option.placeId, label: option.label, score, rationale, evidence: evidenceSummary(option, now) })),
     };
   }
   const rationale = [...best.rationale];
@@ -151,7 +151,7 @@ export function scoreJourneyOptions(options: JourneyOption[], now = Date.now()):
     simulated: scored.some((item) => item.simulated),
     evidenceCoverage: best.used / 11,
     rationale,
-    alternatives: scored.slice(1).map(({ option, score }) => ({ placeId: option.placeId, label: option.label, score })),
+    alternatives: scored.slice(1).map(({ option, score, rationale }) => ({ placeId: option.placeId, label: option.label, score, rationale, evidence: evidenceSummary(option, now) })),
   };
 }
 
@@ -243,7 +243,7 @@ export async function recommendWholeJourney(input: {
   }
   const simulatedEvidence = [evidence.origin, evidence.destination, evidence.currentRoute, ...supportingEvidence]
     .some((item) => item.source === "simulated");
-  proposal.payload.recommendation = {
+  const recommendationSummary = {
     score: recommendation.score,
     simulated: recommendation.simulated || simulatedEvidence,
     evidenceCoverage: recommendation.evidenceCoverage,
@@ -254,6 +254,7 @@ export async function recommendWholeJourney(input: {
       evidenceSummaryItem("destination", evidence.destination),
       evidenceSummaryItem("currentRoute", evidence.currentRoute),
     ],
+    alternatives: recommendation.alternatives.map(({ placeId, label, rationale, evidence }) => ({ placeId, label, rationale, evidence })),
   };
 
   return {
@@ -263,6 +264,7 @@ export async function recommendWholeJourney(input: {
     traceId: message.traceId,
     status: "proposal",
     centerProposal: proposal,
+    recommendation: recommendationSummary,
   };
 }
 

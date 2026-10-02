@@ -24,8 +24,103 @@
     },
     "expected": {
       "type": "object",
-      "required": ["voice"],
       "properties": {
+        "initialState": { "$ref": "#/definitions/stateExpectation" },
+        "finalState": { "$ref": "#/definitions/stateExpectation" },
+        "commands": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["stepId", "status"],
+            "properties": {
+              "stepId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+              "status": { "enum": ["RECEIVED", "REJECTED"] },
+              "reasonCode": { "type": "string", "minLength": 1, "maxLength": 128 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "decisions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["stepId", "outcome"],
+            "properties": {
+              "stepId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+              "outcome": { "enum": ["EXECUTE", "ASK", "ROUTE", "DEFER", "REJECT"] },
+              "proposalId": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "reasonCode": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "consentRequired": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["stepId"],
+            "properties": {
+              "stepId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+              "proposalId": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "proposalAlias": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+              "kind": { "enum": ["SPEAK", "SHOW_INFORMATION", "SHOW_GUIDANCE", "SEARCH_PLACE", "CALCULATE_ROUTE", "ADD_TRIP_STOP", "START_PARKING_GUIDANCE", "HANDOFF_DISPLAY", "SUPPRESS_NOTIFICATION", "CHANGE_CABIN_SETTING", "PREPARE_OFFLINE_CONTEXT", "REQUEST_CONFIRMATION", "WARN"] },
+              "targetRole": { "$ref": "protocol.schema.json#/definitions/displayRole" },
+              "status": { "enum": ["proposed", "routed", "awaiting_consent", "deferred", "executing", "declined", "rejected", "interrupted", "completed"] }
+            },
+            "anyOf": [
+              { "required": ["proposalId"] },
+              { "required": ["proposalAlias"] },
+              { "required": ["kind"] }
+            ],
+            "additionalProperties": false
+          }
+        },
+        "displays": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["displayId"],
+            "properties": {
+              "displayId": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "role": { "$ref": "protocol.schema.json#/definitions/displayRole" },
+              "stateFields": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "$ref": "#/definitions/stateFieldExpectation" }
+              }
+            },
+            "anyOf": [
+              { "required": ["role"] },
+              { "required": ["stateFields"] }
+            ],
+            "additionalProperties": false
+          }
+        },
+        "metrics": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "enum": ["completedSteps", "commandReceiptCount", "signalReceiptCount", "policyDecisionCount", "journeyStopCount", "voiceTransitionCount", "stateRevision", "durationMs"] },
+              "equals": { "type": "number" },
+              "min": { "type": "number" },
+              "max": { "type": "number" }
+            },
+            "anyOf": [
+              { "required": ["equals"] },
+              { "required": ["min"] },
+              { "required": ["max"] }
+            ],
+            "additionalProperties": false
+          }
+        },
         "voice": {
           "type": "object",
           "properties": {
@@ -108,6 +203,16 @@
           "additionalProperties": false
         }
       },
+      "anyOf": [
+        { "required": ["initialState"] },
+        { "required": ["finalState"] },
+        { "required": ["commands"] },
+        { "required": ["decisions"] },
+        { "required": ["actions"] },
+        { "required": ["displays"] },
+        { "required": ["metrics"] },
+        { "required": ["voice"] }
+      ],
       "additionalProperties": false
     },
     "timeline": {
@@ -347,6 +452,29 @@
           }
         ]
       }
+    }
+  },
+  "definitions": {
+    "stateExpectation": {
+      "type": "object",
+      "required": ["fields"],
+      "properties": {
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/stateFieldExpectation" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "stateFieldExpectation": {
+      "type": "object",
+      "required": ["path", "equals"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "equals": {}
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

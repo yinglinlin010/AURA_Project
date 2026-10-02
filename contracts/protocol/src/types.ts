@@ -439,8 +439,33 @@ interface JourneyRecommendationResultBase {
   traceId: string;
 }
 
+export interface JourneyEvidenceSummary {
+  criterion: string;
+  source: "sensor" | "simulated" | "api" | "derived" | "cache";
+  sourceLabel: string;
+  observedAt: number;
+  freshness: "fresh" | "cached" | "stale" | "unknown";
+}
+
+export interface JourneyRecommendationOptionSummary {
+  placeId: string;
+  label: string;
+  rationale: string[];
+  evidence: JourneyEvidenceSummary[];
+}
+
+export interface JourneyRecommendationSummary {
+  score: number;
+  simulated: boolean;
+  evidenceCoverage: number;
+  rationale: string[];
+  evidence: JourneyEvidenceSummary[];
+  wholeJourneyContext: JourneyEvidenceSummary[];
+  alternatives: JourneyRecommendationOptionSummary[];
+}
+
 export type JourneyRecommendationResultMessage = JourneyRecommendationResultBase & (
-  | { status: "proposal"; centerProposal: ActionProposalRequest; reasonCode?: never }
+  | { status: "proposal"; centerProposal: ActionProposalRequest; recommendation: JourneyRecommendationSummary; reasonCode?: never }
   | { status: "abstained"; reasonCode: string; centerProposal?: never }
 );
 
