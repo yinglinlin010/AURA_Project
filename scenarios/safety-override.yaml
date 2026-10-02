@@ -1,0 +1,19 @@
+id: safety-override
+name: Critical signal interrupts secondary task
+description: A critical simulated hazard follows a running secondary task and triggers the local safety supervisor.
+timeline:
+  - id: start-secondary-task
+    atMs: 0
+    kind: task.start
+    task:
+      taskId: passenger-recommendation
+      priority: secondary
+  - id: critical-hazard
+    atMs: 500
+    kind: signal
+    signal:
+      type: safety.hazard
+      value:
+        severity: CRITICAL
+        source: obstacle-distance
+      confidence: 0.99

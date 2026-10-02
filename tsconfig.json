@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": ".",
+    "outDir": "dist",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "declaration": true,
+    "types": ["node"]
+  },
+  "include": [
+    "contracts/protocol/src/**/*.ts",
+    "contracts/scenarios/src/**/*.ts",
+    "packages/core-domain/src/**/*.ts",
+    "packages/core-runtime/src/**/*.ts",
+    "apps/core-host/src/**/*.ts",
+    "adapters/simulator/src/**/*.ts",
+    "adapters/**/*.ts",
+    "scripts/**/*.ts"
+  ]
+}

@@ -1,5 +1,5 @@
 # AURA Display Grid & Layout Structure
-*Based on Master Spec 61.3 - 61.5 & Tactile Slate Visual System*
+*Supplemental layout notes for Master Spec Section 64 and the final five HMI images. Follow the images if proportions or composition differ.*
 
 ## 共通排版原則 (Global Layout Rules)
 - **Hairline Grids:** 畫面區塊不使用 margin 留白與陰影來區隔，而是全部貼齊，並使用 `1px 實線 (Hairline)` 切割。

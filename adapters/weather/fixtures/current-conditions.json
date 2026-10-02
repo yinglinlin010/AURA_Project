@@ -1,0 +1,8 @@
+{
+  "provider": "aura-weather-fixture",
+  "location": "Taipei",
+  "observedAt": "2026-10-02T00:00:00.000Z",
+  "temperatureCelsius": 27,
+  "condition": "cloudy",
+  "precipitationProbability": 0.2
+}

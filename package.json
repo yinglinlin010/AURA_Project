@@ -1,0 +1,29 @@
+{
+  "name": "aura-backend",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && npm run start:core",
+    "start:core": "node dist/apps/core-host/src/main.js",
+    "scenario": "node dist/adapters/simulator/src/cli.js",
+    "demo:router": "node dist/scripts/demo-intelligence-router.js",
+    "test:event-bus": "tsc -p tsconfig.test.json && node --test dist-test/packages/core-runtime/test/event-bus.test.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.26.0",
+    "ajv": "^8.17.1",
+    "better-sqlite3": "^12.4.1",
+    "ws": "^8.22.0",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^20.19.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3"
+  }
+}

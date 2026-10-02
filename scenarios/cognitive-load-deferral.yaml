@@ -1,0 +1,47 @@
+id: cognitive-load-deferral
+name: Rear proposal waits for driver attention
+description: A secondary Rear proposal is deferred at high load, routed when load falls, then approved by the Center role.
+timeline:
+  - id: driver-busy
+    atMs: 0
+    kind: signal
+    signal:
+      type: driver.cognitive_load
+      value:
+        level: high
+        confidence: 0.95
+      confidence: 0.95
+  - id: rear-proposes-stop
+    atMs: 300
+    kind: command
+    displayId: rear-tablet
+    command:
+      type: action.propose
+      payload:
+        proposal:
+          proposalId: rear-stop-001
+          kind: ADD_TRIP_STOP
+          summary: Add a coffee stop to the route
+          targetRole: center
+          priority: secondary
+          requiresConsent: true
+          payload:
+            placeId: demo-cafe
+  - id: driver-load-drops
+    atMs: 900
+    kind: signal
+    signal:
+      type: driver.cognitive_load
+      value:
+        level: low
+        confidence: 0.92
+      confidence: 0.92
+  - id: center-approves
+    atMs: 1200
+    kind: command
+    displayId: center-main
+    command:
+      type: action.consent
+      payload:
+        proposalId: rear-stop-001
+        decision: approve

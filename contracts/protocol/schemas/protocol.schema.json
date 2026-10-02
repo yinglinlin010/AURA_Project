@@ -1,0 +1,2124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aura.local/schemas/protocol.schema.json",
+  "title": "AURA version 1 protocol and runtime contracts",
+  "definitions": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "displayRole": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "protocolVersion": {
+      "const": 1
+    },
+    "gear": {
+      "enum": [
+        "P",
+        "R",
+        "N",
+        "D",
+        "UNKNOWN"
+      ]
+    },
+    "cognitiveLoad": {
+      "enum": [
+        "low",
+        "normal",
+        "high",
+        "critical"
+      ]
+    },
+    "vehicleState": {
+      "type": "object",
+      "required": [
+        "speedKph",
+        "gear"
+      ],
+      "properties": {
+        "speedKph": {
+          "type": "number",
+          "minimum": 0
+        },
+        "gear": {
+          "$ref": "#/definitions/gear"
+        },
+        "steeringAngleDeg": {
+          "type": "number"
+        },
+        "drivingState": {
+          "enum": [
+            "parked",
+            "driving",
+            "reversing",
+            "unknown"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "contextSignal": {
+      "type": "object",
+      "required": [
+        "signalId",
+        "type",
+        "value",
+        "source",
+        "timestamp"
+      ],
+      "properties": {
+        "signalId": {
+          "$ref": "#/definitions/id"
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "value": {},
+        "source": {
+          "enum": [
+            "sensor",
+            "simulated",
+            "api",
+            "derived",
+            "cache"
+          ]
+        },
+        "timestamp": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "freshness": {
+          "enum": [
+            "fresh",
+            "cached",
+            "stale",
+            "unknown"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "proposalRequest": {
+      "type": "object",
+      "required": [
+        "proposalId",
+        "kind",
+        "summary",
+        "targetRole",
+        "priority",
+        "requiresConsent",
+        "payload"
+      ],
+      "properties": {
+        "proposalId": {
+          "$ref": "#/definitions/id"
+        },
+        "kind": {
+          "enum": [
+            "SPEAK",
+            "SHOW_INFORMATION",
+            "SHOW_GUIDANCE",
+            "SEARCH_PLACE",
+            "CALCULATE_ROUTE",
+            "ADD_TRIP_STOP",
+            "START_PARKING_GUIDANCE",
+            "HANDOFF_DISPLAY",
+            "SUPPRESS_NOTIFICATION",
+            "CHANGE_CABIN_SETTING",
+            "PREPARE_OFFLINE_CONTEXT",
+            "REQUEST_CONFIRMATION",
+            "WARN"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "targetRole": {
+          "$ref": "#/definitions/displayRole"
+        },
+        "priority": {
+          "enum": [
+            "secondary",
+            "normal",
+            "urgent"
+          ]
+        },
+        "requiresConsent": {
+          "type": "boolean"
+        },
+        "payload": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "command": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "type": {
+              "const": "vehicle.telemetry.report"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "vehicle"
+              ],
+              "properties": {
+                "vehicle": {
+                  "type": "object",
+                  "properties": {
+                    "speedKph": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "gear": {
+                      "$ref": "#/definitions/gear"
+                    },
+                    "steeringAngleDeg": {
+                      "type": "number"
+                    },
+                    "drivingState": {
+                      "enum": [
+                        "parked",
+                        "driving",
+                        "reversing",
+                        "unknown"
+                      ]
+                    }
+                  },
+                  "minProperties": 1,
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "type": {
+              "const": "driver.cognitive_load.report"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "level",
+                "timestamp"
+              ],
+              "properties": {
+                "level": {
+                  "enum": [
+                    "low",
+                    "normal",
+                    "high",
+                    "critical"
+                  ]
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "timestamp": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "type": {
+              "const": "action.propose"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "proposal"
+              ],
+              "properties": {
+                "proposal": {
+                  "$ref": "#/definitions/proposalRequest"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "type": {
+              "const": "action.consent"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "proposalId",
+                "decision"
+              ],
+              "properties": {
+                "proposalId": {
+                  "$ref": "#/definitions/id"
+                },
+                "decision": {
+                  "enum": [
+                    "approve",
+                    "decline"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "commandEnvelope": {
+      "type": "object",
+      "required": [
+        "protocolVersion",
+        "kind",
+        "messageId",
+        "commandId",
+        "sessionId",
+        "traceId",
+        "sentAt",
+        "sender",
+        "command"
+      ],
+      "properties": {
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "kind": {
+          "const": "command"
+        },
+        "messageId": {
+          "$ref": "#/definitions/id"
+        },
+        "commandId": {
+          "$ref": "#/definitions/id"
+        },
+        "sessionId": {
+          "$ref": "#/definitions/id"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        },
+        "sentAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sender": {
+          "type": "object",
+          "required": [
+            "deviceId",
+            "displayId"
+          ],
+          "properties": {
+            "deviceId": {
+              "$ref": "#/definitions/id"
+            },
+            "displayId": {
+              "$ref": "#/definitions/id"
+            }
+          },
+          "additionalProperties": false
+        },
+        "command": {
+          "$ref": "#/definitions/command"
+        }
+      },
+      "additionalProperties": false
+    },
+    "registerMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "displayId",
+        "deviceId",
+        "traceId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "register"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "displayId": {
+          "$ref": "#/definitions/id"
+        },
+        "deviceId": {
+          "$ref": "#/definitions/id"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "resyncMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "sessionId",
+        "traceId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "resync"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "sessionId": {
+          "$ref": "#/definitions/id"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        },
+        "afterSequence": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "pingMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "pingId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "ping"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "pingId": {
+          "$ref": "#/definitions/id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "clientMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/registerMessage"
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "envelope"
+          ],
+          "properties": {
+            "kind": {
+              "const": "command"
+            },
+            "envelope": {
+              "$ref": "#/definitions/commandEnvelope"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/definitions/resyncMessage"
+        },
+        {
+          "$ref": "#/definitions/pingMessage"
+        },
+        {
+          "$ref": "#/definitions/voiceStartMessage"
+        },
+        {
+          "$ref": "#/definitions/voiceStopMessage"
+        },
+        {
+          "$ref": "#/definitions/voiceTextMessage"
+        }
+      ]
+    },
+    "displayRegistration": {
+      "type": "object",
+      "required": [
+        "displayId",
+        "deviceId",
+        "role",
+        "protocolVersion",
+        "enabled"
+      ],
+      "properties": {
+        "displayId": {
+          "$ref": "#/definitions/id"
+        },
+        "deviceId": {
+          "$ref": "#/definitions/id"
+        },
+        "role": {
+          "$ref": "#/definitions/displayRole"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "displayRegistry": {
+      "type": "object",
+      "required": [
+        "version",
+        "displays"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "displays": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/displayRegistration"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "actionProposal": {
+      "type": "object",
+      "required": [
+        "proposalId",
+        "kind",
+        "summary",
+        "targetRole",
+        "priority",
+        "requiresConsent",
+        "payload",
+        "requestedByRole",
+        "createdAt",
+        "status",
+        "traceId"
+      ],
+      "properties": {
+        "proposalId": {
+          "$ref": "#/definitions/id"
+        },
+        "kind": {
+          "enum": [
+            "SPEAK",
+            "SHOW_INFORMATION",
+            "SHOW_GUIDANCE",
+            "SEARCH_PLACE",
+            "CALCULATE_ROUTE",
+            "ADD_TRIP_STOP",
+            "START_PARKING_GUIDANCE",
+            "HANDOFF_DISPLAY",
+            "SUPPRESS_NOTIFICATION",
+            "CHANGE_CABIN_SETTING",
+            "PREPARE_OFFLINE_CONTEXT",
+            "REQUEST_CONFIRMATION",
+            "WARN"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "targetRole": {
+          "$ref": "#/definitions/displayRole"
+        },
+        "priority": {
+          "enum": [
+            "secondary",
+            "normal",
+            "urgent"
+          ]
+        },
+        "requiresConsent": {
+          "type": "boolean"
+        },
+        "payload": {
+          "type": "object"
+        },
+        "requestedByRole": {
+          "$ref": "#/definitions/displayRole"
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "enum": [
+            "proposed",
+            "routed",
+            "awaiting_consent",
+            "deferred",
+            "executing",
+            "declined",
+            "rejected",
+            "interrupted",
+            "completed"
+          ]
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        },
+        "lastReasonCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "consentGranted": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "deferCondition": {
+      "type": "object",
+      "required": [
+        "type",
+        "currentThreshold",
+        "reevaluateOn"
+      ],
+      "properties": {
+        "type": {
+          "const": "driver_load_below"
+        },
+        "currentThreshold": {
+          "const": "high"
+        },
+        "reevaluateOn": {
+          "const": "driver.cognitive_load"
+        }
+      },
+      "additionalProperties": false
+    },
+    "policyDecision": {
+      "type": "object",
+      "required": [
+        "decisionId",
+        "proposalId",
+        "traceId",
+        "outcome",
+        "reasonCode",
+        "consentRequired",
+        "policyVersion",
+        "decidedAt"
+      ],
+      "properties": {
+        "decisionId": {
+          "$ref": "#/definitions/id"
+        },
+        "proposalId": {
+          "$ref": "#/definitions/id"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        },
+        "outcome": {
+          "enum": [
+            "EXECUTE",
+            "ASK",
+            "ROUTE",
+            "DEFER",
+            "REJECT"
+          ]
+        },
+        "reasonCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "consentRequired": {
+          "type": "boolean"
+        },
+        "targetRole": {
+          "$ref": "#/definitions/displayRole"
+        },
+        "deferUntil": {
+          "$ref": "#/definitions/deferCondition"
+        },
+        "policyVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decidedAt": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "activeTask": {
+      "type": "object",
+      "required": [
+        "taskId",
+        "traceId",
+        "priority",
+        "status",
+        "startedAt"
+      ],
+      "properties": {
+        "taskId": {
+          "$ref": "#/definitions/id"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        },
+        "priority": {
+          "enum": [
+            "primary",
+            "secondary",
+            "critical"
+          ]
+        },
+        "status": {
+          "enum": [
+            "running",
+            "interrupted",
+            "completed"
+          ]
+        },
+        "startedAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "interruptionReason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "displayConnection": {
+      "type": "object",
+      "required": [
+        "displayId",
+        "connected",
+        "lastSeenAt",
+        "sessionId"
+      ],
+      "properties": {
+        "displayId": {
+          "$ref": "#/definitions/id"
+        },
+        "connected": {
+          "type": "boolean"
+        },
+        "lastSeenAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "$ref": "#/definitions/id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sharedState": {
+      "type": "object",
+      "required": [
+        "revision",
+        "vehicle",
+        "driver",
+        "activeProposals",
+        "activeTasks",
+        "latestSignals",
+        "displayConnections",
+        "journey"
+      ],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "vehicle": {
+          "$ref": "#/definitions/vehicleState"
+        },
+        "driver": {
+          "type": "object",
+          "properties": {
+            "currentLoad": {
+              "$ref": "#/definitions/cognitiveLoad"
+            },
+            "loadConfidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "loadObservedAt": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "activeProposals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/actionProposal"
+          }
+        },
+        "activeTasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/activeTask"
+          }
+        },
+        "latestSignals": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/contextSignal"
+          }
+        },
+        "displayConnections": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/displayConnection"
+          }
+        },
+        "journey": {
+          "type": "object",
+          "required": [
+            "stops"
+          ],
+          "properties": {
+            "stops": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/journeyStop"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "stateSnapshot": {
+      "type": "object",
+      "required": [
+        "protocolVersion",
+        "sessionId",
+        "stateRevision",
+        "sequence",
+        "generatedAt",
+        "state"
+      ],
+      "properties": {
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "sessionId": {
+          "$ref": "#/definitions/id"
+        },
+        "stateRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "generatedAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "displayId": {
+          "$ref": "#/definitions/id"
+        },
+        "state": {
+          "$ref": "#/definitions/sharedState"
+        }
+      },
+      "additionalProperties": false
+    },
+    "eventEnvelope": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "context.signal.received"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "signal"
+              ],
+              "properties": {
+                "signal": {
+                  "$ref": "#/definitions/contextSignal"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "vehicle.state.updated"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "vehicle"
+              ],
+              "properties": {
+                "vehicle": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "properties": {
+                    "speedKph": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "gear": {
+                      "$ref": "#/definitions/gear"
+                    },
+                    "steeringAngleDeg": {
+                      "type": "number"
+                    },
+                    "drivingState": {
+                      "enum": [
+                        "parked",
+                        "driving",
+                        "reversing",
+                        "unknown"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "driver.load.updated"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "level",
+                "timestamp"
+              ],
+              "properties": {
+                "level": {
+                  "enum": [
+                    "low",
+                    "normal",
+                    "high",
+                    "critical"
+                  ]
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "timestamp": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "proposal.created"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "proposal"
+              ],
+              "properties": {
+                "proposal": {
+                  "$ref": "#/definitions/actionProposal"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "proposal.policy.decided"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "decision"
+              ],
+              "properties": {
+                "decision": {
+                  "$ref": "#/definitions/policyDecision"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "proposal.consent.recorded"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "proposalId",
+                "decision",
+                "responderRole"
+              ],
+              "properties": {
+                "proposalId": {
+                  "$ref": "#/definitions/id"
+                },
+                "decision": {
+                  "enum": [
+                    "approve",
+                    "decline"
+                  ]
+                },
+                "responderRole": {
+                  "$ref": "#/definitions/displayRole"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "proposal.status.changed"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "proposalId",
+                "status",
+                "reasonCode"
+              ],
+              "properties": {
+                "proposalId": {
+                  "$ref": "#/definitions/id"
+                },
+                "status": {
+                  "enum": [
+                    "proposed",
+                    "routed",
+                    "awaiting_consent",
+                    "deferred",
+                    "executing",
+                    "declined",
+                    "rejected",
+                    "interrupted",
+                    "completed"
+                  ]
+                },
+                "reasonCode": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "safety.override.activated"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "signal",
+                "decision",
+                "interruptedTaskIds"
+              ],
+              "properties": {
+                "signal": {
+                  "$ref": "#/definitions/contextSignal"
+                },
+                "decision": {
+                  "$ref": "#/definitions/policyDecision"
+                },
+                "interruptedTaskIds": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/id"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "task.registered"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "task"
+              ],
+              "properties": {
+                "task": {
+                  "$ref": "#/definitions/activeTask"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "task.interrupted"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "taskId",
+                "reasonCode"
+              ],
+              "properties": {
+                "taskId": {
+                  "$ref": "#/definitions/id"
+                },
+                "reasonCode": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "task.completed"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "taskId"
+              ],
+              "properties": {
+                "taskId": {
+                  "$ref": "#/definitions/id"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "display.connection.changed"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "displayId",
+                "connected",
+                "lastSeenAt"
+              ],
+              "properties": {
+                "displayId": {
+                  "$ref": "#/definitions/id"
+                },
+                "connected": {
+                  "type": "boolean"
+                },
+                "lastSeenAt": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "journey.stop.added"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "stop"
+              ],
+              "properties": {
+                "stop": {
+                  "$ref": "#/definitions/journeyStop"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "commandReceipt": {
+      "type": "object",
+      "required": [
+        "commandId",
+        "traceId",
+        "status",
+        "stateRevision",
+        "replayed"
+      ],
+      "properties": {
+        "commandId": {
+          "$ref": "#/definitions/id"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        },
+        "status": {
+          "enum": [
+            "RECEIVED",
+            "REJECTED"
+          ]
+        },
+        "stateRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "replayed": {
+          "type": "boolean"
+        },
+        "reasonCode": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "welcomeMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "sessionId",
+        "sequence",
+        "displayId",
+        "role"
+      ],
+      "properties": {
+        "kind": {
+          "const": "welcome"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "sessionId": {
+          "$ref": "#/definitions/id"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "displayId": {
+          "$ref": "#/definitions/id"
+        },
+        "role": {
+          "$ref": "#/definitions/displayRole"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ackMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "receipt"
+      ],
+      "properties": {
+        "kind": {
+          "const": "ack"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "receipt": {
+          "$ref": "#/definitions/commandReceipt"
+        }
+      },
+      "additionalProperties": false
+    },
+    "snapshotMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "snapshot"
+      ],
+      "properties": {
+        "kind": {
+          "const": "snapshot"
+        },
+        "snapshot": {
+          "$ref": "#/definitions/stateSnapshot"
+        }
+      },
+      "additionalProperties": false
+    },
+    "eventMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "event"
+      ],
+      "properties": {
+        "kind": {
+          "const": "event"
+        },
+        "event": {
+          "$ref": "#/definitions/eventEnvelope"
+        }
+      },
+      "additionalProperties": false
+    },
+    "errorMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "kind": {
+          "const": "error"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "pongMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "pingId",
+        "serverTime"
+      ],
+      "properties": {
+        "kind": {
+          "const": "pong"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "pingId": {
+          "$ref": "#/definitions/id"
+        },
+        "serverTime": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "serverMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/welcomeMessage"
+        },
+        {
+          "$ref": "#/definitions/ackMessage"
+        },
+        {
+          "$ref": "#/definitions/snapshotMessage"
+        },
+        {
+          "$ref": "#/definitions/eventMessage"
+        },
+        {
+          "$ref": "#/definitions/errorMessage"
+        },
+        {
+          "$ref": "#/definitions/pongMessage"
+        },
+        {
+          "$ref": "#/definitions/voiceStatusMessage"
+        },
+        {
+          "$ref": "#/definitions/voiceTranscriptMessage"
+        },
+        {
+          "$ref": "#/definitions/voiceAudioMessage"
+        }
+      ]
+    },
+    "voiceStartMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "traceId",
+        "encoding",
+        "sampleRateHz",
+        "channels"
+      ],
+      "properties": {
+        "kind": {
+          "const": "voice.start"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        },
+        "encoding": {
+          "const": "pcm_s16le"
+        },
+        "sampleRateHz": {
+          "const": 16000
+        },
+        "channels": {
+          "const": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "voiceStopMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "traceId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "voice.stop"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "voiceTextMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "traceId",
+        "text"
+      ],
+      "properties": {
+        "kind": {
+          "const": "voice.text"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      },
+      "additionalProperties": false
+    },
+    "voiceStatusMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "traceId",
+        "state"
+      ],
+      "properties": {
+        "kind": {
+          "const": "voice.status"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        },
+        "state": {
+          "enum": [
+            "IDLE",
+            "LISTENING",
+            "TRANSCRIBING",
+            "THINKING",
+            "SPEAKING"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "voiceTranscriptMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "traceId",
+        "direction",
+        "text",
+        "isFinal"
+      ],
+      "properties": {
+        "kind": {
+          "const": "voice.transcript"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        },
+        "direction": {
+          "enum": [
+            "input",
+            "output"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "isFinal": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "voiceAudioMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "traceId",
+        "phase",
+        "mimeType"
+      ],
+      "properties": {
+        "kind": {
+          "const": "voice.audio"
+        },
+        "protocolVersion": {
+          "$ref": "#/definitions/protocolVersion"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        },
+        "phase": {
+          "enum": [
+            "start",
+            "end"
+          ]
+        },
+        "mimeType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "additionalProperties": false
+    },
+    "journeyStop": {
+      "type": "object",
+      "required": [
+        "stopId",
+        "sourceProposalId",
+        "label",
+        "addedAt"
+      ],
+      "properties": {
+        "stopId": {
+          "$ref": "#/definitions/id"
+        },
+        "sourceProposalId": {
+          "$ref": "#/definitions/id"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "placeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "addedAt": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

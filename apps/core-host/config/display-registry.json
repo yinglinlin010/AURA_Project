@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "displays": [
+    {
+      "displayId": "cluster-main",
+      "deviceId": "main-computer",
+      "role": "cluster",
+      "protocolVersion": 1,
+      "enabled": true,
+      "capabilities": ["safety-alerts", "vehicle-state"]
+    },
+    {
+      "displayId": "center-main",
+      "deviceId": "main-computer",
+      "role": "center",
+      "protocolVersion": 1,
+      "enabled": true,
+      "capabilities": ["driver-confirmation", "journey"]
+    },
+    {
+      "displayId": "front-passenger-main",
+      "deviceId": "main-computer",
+      "role": "front_passenger",
+      "protocolVersion": 1,
+      "enabled": true,
+      "capabilities": ["exploration", "proposals"]
+    },
+    {
+      "displayId": "rear-tablet",
+      "deviceId": "rear-tablet-device",
+      "role": "rear",
+      "protocolVersion": 1,
+      "enabled": true,
+      "capabilities": ["exploration", "proposals"]
+    },
+    {
+      "displayId": "window-tablet",
+      "deviceId": "rear-tablet-device",
+      "role": "interactive_window",
+      "protocolVersion": 1,
+      "enabled": true,
+      "capabilities": ["ambient-context", "handoff"]
+    }
+  ]
+}
