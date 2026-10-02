@@ -2,6 +2,7 @@ import {
   GoogleGenAI,
   Modality,
   type LiveConnectConfig,
+  type LiveConnectParameters,
   type LiveServerMessage,
 } from "@google/genai";
 import { StructuredTraceSink, type TraceSink } from "../../packages/core-runtime/src/tracing.js";
@@ -20,6 +21,8 @@ export interface GeminiVoiceAdapterOptions {
   now?: () => number;
   proposalTimeoutMs?: number;
   assistantName?: string;
+  connectTimeoutMs?: number;
+  liveConnector?: (apiKey: string, parameters: LiveConnectParameters) => Promise<Awaited<ReturnType<GoogleGenAI["live"]["connect"]>>>;
 }
 
 interface PendingProposal {
@@ -89,9 +92,12 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
   private readonly now: () => number;
   private readonly proposalTimeoutMs: number;
   private readonly assistantName: string;
+  private readonly connectTimeoutMs: number;
+  private readonly liveConnector: NonNullable<GeminiVoiceAdapterOptions["liveConnector"]>;
   private readonly listeners = new Set<(event: GeminiVoiceEvent) => void>();
   private session: Awaited<ReturnType<GoogleGenAI["live"]["connect"]>> | undefined;
   private connectPromise: Promise<void> | undefined;
+  private rejectConnect: ((error: Error) => void) | undefined;
   private sessionGeneration = 0;
   private pendingProposal: PendingProposal | undefined;
   private currentTraceId = "voice-session";
@@ -107,6 +113,12 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
     this.now = options.now ?? Date.now;
     this.proposalTimeoutMs = options.proposalTimeoutMs ?? 30_000;
     this.assistantName = options.assistantName?.trim() || DEFAULT_BRAND.assistantName;
+    this.connectTimeoutMs = options.connectTimeoutMs ?? 10_000;
+    if (!Number.isInteger(this.connectTimeoutMs) || this.connectTimeoutMs < 1 || this.connectTimeoutMs > 60_000) {
+      throw new Error("INVALID_GEMINI_CONNECT_TIMEOUT");
+    }
+    this.liveConnector = options.liveConnector ?? ((apiKey, parameters) =>
+      new GoogleGenAI({ apiKey }).live.connect(parameters));
   }
 
   get connected(): boolean {
@@ -151,7 +163,17 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
     this.currentTraceId = traceId;
     this.sessionStartedAt = startedAt;
     const generation = ++this.sessionGeneration;
-    const ai = new GoogleGenAI({ apiKey: this.apiKey });
+    let handshakeSettled = false;
+    let rejectHandshake!: (error: Error) => void;
+    const handshakeFailure = new Promise<never>((_resolve, reject) => {
+      rejectHandshake = reject;
+    });
+    const failHandshake = (error: Error) => {
+      if (handshakeSettled) return;
+      handshakeSettled = true;
+      rejectHandshake(error);
+    };
+    this.rejectConnect = failHandshake;
     const config: LiveConnectConfig = {
       responseModalities: [Modality.AUDIO],
       inputAudioTranscription: {},
@@ -167,8 +189,9 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
         : {}),
     };
 
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      const session = await ai.live.connect({
+      const connection = this.liveConnector(this.apiKey, {
         model: this.model,
         config,
         callbacks: {
@@ -178,6 +201,7 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
           onerror: (event) => {
             if (generation !== this.sessionGeneration) return;
             const code = sanitizeReason(event.message || "GEMINI_LIVE_ERROR");
+            failHandshake(new Error(code));
             this.emit({ type: "provider_error", reasonCode: code });
           },
           onclose: (event) => {
@@ -186,6 +210,7 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
               this.session = undefined;
               this.sessionGeneration += 1;
               const closeReason = sanitizeReason(event.reason || "GEMINI_LIVE_CLOSED");
+              failHandshake(new Error(closeReason));
               this.rejectPending(new Error(closeReason));
               this.emit({ type: "provider_error", reasonCode: closeReason });
             }
@@ -205,6 +230,14 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
           },
         },
       });
+      void connection.then((lateSession) => {
+        if (handshakeSettled || generation !== this.sessionGeneration) lateSession.close();
+      }, () => undefined);
+      const connectTimeout = new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error("GEMINI_CONNECT_TIMEOUT")), this.connectTimeoutMs);
+      });
+      const session = await Promise.race([connection, handshakeFailure, connectTimeout]);
+      handshakeSettled = true;
       if (generation !== this.sessionGeneration) {
         session.close();
         return;
@@ -222,6 +255,8 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
         rawAudioDropped: true,
       });
     } catch (error) {
+      handshakeSettled = true;
+      if (generation === this.sessionGeneration) this.sessionGeneration += 1;
       const fallbackReason = sanitizeReason(error instanceof Error ? error.message : "GEMINI_CONNECT_FAILED");
       this.trace.record({
         sessionId: this.sessionId,
@@ -236,6 +271,9 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
         rawAudioDropped: true,
       });
       throw new Error(fallbackReason);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      if (this.rejectConnect === failHandshake) this.rejectConnect = undefined;
     }
   }
 
@@ -315,6 +353,7 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
   }
 
   async interrupt(traceId: string, reasonCode = "VOICE_INTERRUPTED"): Promise<void> {
+    this.rejectConnect?.(new Error(reasonCode));
     const session = this.session;
     this.session = undefined;
     this.sessionGeneration += 1;
@@ -336,6 +375,7 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
   }
 
   close(): void {
+    this.rejectConnect?.(new Error("VOICE_SESSION_CLOSED"));
     const session = this.session;
     this.session = undefined;
     this.sessionGeneration += 1;
