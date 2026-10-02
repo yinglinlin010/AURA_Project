@@ -12,6 +12,8 @@ import type {
   ClientMessage,
   DisplayRegistration,
   DisplayRegistry,
+  JourneyRecommendationMessage,
+  JourneyRecommendationResultMessage,
   JourneyRoutePreviewMessage,
   PlacesSearchMessage,
   ServerMessage,
@@ -20,6 +22,7 @@ import { CoreRuntime } from "../../../packages/core-runtime/src/index.js";
 import type { VoiceRuntime } from "../../../packages/core-runtime/src/voice-runtime.js";
 import type { MapboxDirectionsAdapter } from "../../../adapters/maps/mapbox-directions-adapter.js";
 import type { MapboxSearchBoxAdapter } from "../../../adapters/maps/mapbox-search-box-adapter.js";
+import { recommendWholeJourney, type JourneyRecommendationEvidenceSource } from "../../../packages/core-runtime/src/journey-recommender.js";
 import { GatewayVoiceOutput } from "./gateway-voice-output.js";
 
 interface ClientSession {
@@ -39,6 +42,7 @@ export interface HmiGatewayOptions {
   voiceOutput?: GatewayVoiceOutput;
   places?: MapboxSearchBoxAdapter;
   routing?: MapboxDirectionsAdapter;
+  journeyRecommendations?: JourneyRecommendationEvidenceSource;
 }
 
 export class HmiGateway {
@@ -54,6 +58,7 @@ export class HmiGateway {
   private readonly voiceOutput: GatewayVoiceOutput | undefined;
   private readonly places: MapboxSearchBoxAdapter | undefined;
   private readonly routing: MapboxDirectionsAdapter | undefined;
+  private readonly journeyRecommendations: JourneyRecommendationEvidenceSource | undefined;
   private voiceOwner: ClientSession | undefined;
   private readonly server: WebSocketServer;
   private readonly unsubscribe: () => void;
@@ -66,6 +71,7 @@ export class HmiGateway {
     this.voiceOutput = options.voiceOutput;
     this.places = options.places;
     this.routing = options.routing;
+    this.journeyRecommendations = options.journeyRecommendations;
     this.registry = structuredClone(options.registry);
     this.host = options.host ?? "127.0.0.1";
     this.port = options.port ?? 8765;
@@ -191,6 +197,9 @@ export class HmiGateway {
       case "journey.route.preview":
         void this.previewJourneyRoute(client, message);
         break;
+      case "journey.recommendation.request":
+        void this.recommendJourney(client, message);
+        break;
       case "voice.start":
         void this.startVoice(client, message.traceId);
         break;
@@ -281,6 +290,37 @@ export class HmiGateway {
         errorCode: safeProviderError(error, "MAPBOX_DIRECTIONS_FAILED"),
       });
     }
+  }
+
+  /** A recommendation request is Center-only and remains ephemeral until Center submits its consent proposal. */
+  private async recommendJourney(client: ClientSession, message: JourneyRecommendationMessage): Promise<void> {
+    if (!client.registration) {
+      this.sendError(client.socket, "REGISTRATION_REQUIRED", "Register a display before requesting a journey recommendation.", message.traceId);
+      return;
+    }
+    if (client.registration.role !== "center") {
+      this.sendError(client.socket, "JOURNEY_RECOMMENDATION_ROLE_NOT_ALLOWED", "Whole-journey recommendations are delivered only to the Center display.", message.traceId);
+      return;
+    }
+
+    let result: JourneyRecommendationResultMessage;
+    try {
+      result = await recommendWholeJourney({
+        message,
+        state: this.runtime.getState(),
+        source: this.journeyRecommendations,
+      });
+    } catch {
+      result = {
+        kind: "journey.recommendation.result" as const,
+        protocolVersion: PROTOCOL_VERSION,
+        requestId: message.requestId,
+        traceId: message.traceId,
+        status: "abstained" as const,
+        reasonCode: "WHOLE_JOURNEY_RECOMMENDATION_UNAVAILABLE",
+      };
+    }
+    this.send(client.socket, result);
   }
 
   private async startVoice(client: ClientSession, traceId: string): Promise<void> {

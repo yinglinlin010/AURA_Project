@@ -422,6 +422,28 @@ export interface JourneyRoutePreviewResultsMessage {
   errorCode?: string;
 }
 
+/** Center-only natural-language request for an evidence-backed whole-journey recommendation. */
+export interface JourneyRecommendationMessage {
+  kind: "journey.recommendation.request";
+  protocolVersion: typeof PROTOCOL_VERSION;
+  requestId: string;
+  traceId: string;
+  requestText: string;
+}
+
+/** A recommendation is returned only as a Center-targeted, consent-required action proposal. */
+interface JourneyRecommendationResultBase {
+  kind: "journey.recommendation.result";
+  protocolVersion: typeof PROTOCOL_VERSION;
+  requestId: string;
+  traceId: string;
+}
+
+export type JourneyRecommendationResultMessage = JourneyRecommendationResultBase & (
+  | { status: "proposal"; centerProposal: ActionProposalRequest; reasonCode?: never }
+  | { status: "abstained"; reasonCode: string; centerProposal?: never }
+);
+
 export interface VoiceStartMessage {
   kind: "voice.start";
   protocolVersion: typeof PROTOCOL_VERSION;
@@ -444,7 +466,7 @@ export interface VoiceTextMessage {
   text: string;
 }
 
-export type ClientMessage = RegisterMessage | CommandMessage | ResyncMessage | PingMessage | PlacesSearchMessage | JourneyRoutePreviewMessage | VoiceStartMessage | VoiceStopMessage | VoiceTextMessage;
+export type ClientMessage = RegisterMessage | CommandMessage | ResyncMessage | PingMessage | PlacesSearchMessage | JourneyRoutePreviewMessage | JourneyRecommendationMessage | VoiceStartMessage | VoiceStopMessage | VoiceTextMessage;
 
 export interface WelcomeMessage {
   kind: "welcome";
@@ -519,6 +541,7 @@ export type ServerMessage =
   | PongMessage
   | PlacesSearchResultsMessage
   | JourneyRoutePreviewResultsMessage
+  | JourneyRecommendationResultMessage
   | VoiceStatusMessage
   | VoiceTranscriptMessage
   | VoiceAudioMessage;

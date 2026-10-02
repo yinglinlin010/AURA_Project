@@ -6,6 +6,8 @@
 
 `recommendationStopProposal` converts a selected option into the existing `ADD_TRIP_STOP` contract with a fixed Center target, secondary priority, and mandatory consent. It creates only a proposal request; Core Runtime's existing Action Gate and consent path remain responsible for defer/route/approval and shared journey mutation. A high-load-to-low-load scenario demonstrates the existing DEFER then consent behavior. The comparison fixture demonstrates the higher-rating versus shorter-detour/parking/deadline/follow-up tradeoff, with all illustrative provider-like values explicitly marked simulated.
 
+The current caller path is also guarded: `recommendWholeJourney` requires fresh whole-trip origin, destination, current-route, durable candidate identity and route-detour evidence. Evidence older than 15 minutes, incomplete context, or Mapbox Search Box temporary identities cause an abstention. Core Host accepts a Center-only recommendation request and returns either that abstention or a consent-required Center proposal to the requesting client. No evidence source is configured in the host, and the simulator UI does not yet consume this message, so current requests abstain and M4 is not demonstrated end to end.
+
 ## Dependencies and limits
 
 The scorer does not call map, parking, traffic, weather, or POI providers and does not infer missing values. Existing map adapters do not supply all recommendation dimensions, and this change does not wire a provider enrichment pipeline or a new HMI surface. Arrival deadline, parking, weather, preference, and follow-up evidence therefore require trustworthy upstream inputs before production use. The scenario runner demonstrates policy behavior, not actual provider-backed ranking or vehicle hardware integration.
