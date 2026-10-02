@@ -308,7 +308,7 @@ export class HmiGateway {
       result = await recommendWholeJourney({
         message,
         state: this.runtime.getState(),
-        source: this.journeyRecommendations,
+        ...(this.journeyRecommendations === undefined ? {} : { source: this.journeyRecommendations }),
       });
     } catch {
       result = {

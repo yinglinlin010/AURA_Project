@@ -3,10 +3,11 @@ import { resolve } from "node:path";
 import { assertDisplayRegistry } from "../../../contracts/protocol/src/registry.js";
 import type { DisplayRegistry } from "../../../contracts/protocol/src/types.js";
 import { CoreRuntime } from "../../../packages/core-runtime/src/index.js";
+import { SimulatedJourneyRecommendationEvidenceSource } from "../../../packages/core-runtime/src/journey-recommendation-fixture.js";
 import { HmiGateway } from "./hmi-gateway.js";
 import { GatewayVoiceOutput } from "./gateway-voice-output.js";
 import { createIntelligenceStack } from "./intelligence.js";
-import { createExternalAdapterStack } from "./external-adapters.js";
+import { createExternalAdapterStack, hasWeatherConfiguration } from "./external-adapters.js";
 
 function loadRegistry(): DisplayRegistry {
   const configPath = process.env.AURA_DISPLAY_REGISTRY ??
@@ -19,8 +20,12 @@ function loadRegistry(): DisplayRegistry {
 async function main(): Promise<void> {
   const registry = loadRegistry();
   const runtime = new CoreRuntime({ registry });
+  // The deterministic demo is deliberately opt-in and always reports simulated fixture evidence.
+  const journeyRecommendations = process.env.AURA_SIMULATED_JOURNEY_RECOMMENDATION === "true"
+    ? new SimulatedJourneyRecommendationEvidenceSource()
+    : undefined;
   // Build server-side providers only when configured; adapter construction makes no requests.
-  const externalAdapters = process.env.MAPBOX_ACCESS_TOKEN?.trim()
+  const externalAdapters = process.env.MAPBOX_ACCESS_TOKEN?.trim() || hasWeatherConfiguration()
     ? createExternalAdapterStack(runtime)
     : undefined;
   const audioOutput = new GatewayVoiceOutput((socket, message) => {
@@ -35,6 +40,7 @@ async function main(): Promise<void> {
     path: process.env.AURA_WS_PATH ?? "/ws",
     voice: intelligence.voice,
     voiceOutput: audioOutput,
+    ...(journeyRecommendations === undefined ? {} : { journeyRecommendations }),
     ...(externalAdapters === undefined ? {} : { places: externalAdapters.places, routing: externalAdapters.routing }),
   });
   await gateway.start();

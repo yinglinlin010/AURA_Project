@@ -1,16 +1,29 @@
 {
-  "fixtureLabel": "SIMULATED — illustrative data; not live provider output",
+  "fixtureLabel": "SIMULATED — all trip, route, place and factor values are illustrative; not live provider output",
+  "origin": {
+    "value": { "label": "Munich (illustrative origin)", "location": { "latitude": 48.1372, "longitude": 11.5756 } },
+    "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh"
+  },
+  "destination": {
+    "value": { "label": "Stuttgart (illustrative destination)", "location": { "latitude": 48.7758, "longitude": 9.1829 } },
+    "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh"
+  },
+  "currentRoute": {
+    "value": { "distanceMeters": 236000, "durationMinutes": 180 },
+    "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh"
+  },
   "options": [
     {
       "placeId": "harbor-table",
       "label": "Harbor Table",
       "category": "restaurant",
+      "identityEvidence": { "value": { "placeId": "harbor-table", "label": "Harbor Table", "category": "restaurant", "provider": "simulated-fixture", "use": "durable" }, "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh" },
       "poiQuality": { "value": 4.9, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "detourMinutes": { "value": 24, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "parkingAvailability": { "value": "limited", "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "trafficDelayMinutes": { "value": 18, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "arrivalMinutes": { "value": 72, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
-      "deadlineMinutes": { "value": 75, "source": "user", "sourceLabel": "trip-deadline", "observedAt": 1790910000000, "freshness": "fresh" },
+      "deadlineMinutes": { "value": 75, "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh" },
       "preferenceFit": { "value": 0.9, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "nearbyFollowUps": { "value": [], "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" }
     },
@@ -18,6 +31,7 @@
       "placeId": "garden-cafe",
       "label": "Garden Cafe",
       "category": "restaurant",
+      "identityEvidence": { "value": { "placeId": "garden-cafe", "label": "Garden Cafe", "category": "restaurant", "provider": "simulated-fixture", "use": "durable" }, "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh" },
       "poiQuality": { "value": 4.4, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "detourMinutes": { "value": 6, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "parkingAvailability": { "value": "available", "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
@@ -26,7 +40,7 @@
       "trafficDelayMinutes": { "value": 3, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "weatherImpact": { "value": "adverse", "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "arrivalMinutes": { "value": 54, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
-      "deadlineMinutes": { "value": 75, "source": "user", "sourceLabel": "trip-deadline", "observedAt": 1790910000000, "freshness": "fresh" },
+      "deadlineMinutes": { "value": 75, "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh" },
       "walkingDistanceKm": { "value": 0.2, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "preferenceFit": { "value": 0.75, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "nearbyFollowUps": { "value": [{ "label": "Pharmacy", "category": "essential", "walkingDistanceKm": { "value": 0.3, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" } }, { "label": "Market", "category": "shopping", "walkingDistanceKm": { "value": 0.5, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" } }], "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" }

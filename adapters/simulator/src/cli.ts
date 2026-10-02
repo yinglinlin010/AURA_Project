@@ -4,6 +4,7 @@ import { assertDisplayRegistry } from "../../../contracts/protocol/src/registry.
 import type { DisplayRegistry } from "../../../contracts/protocol/src/types.js";
 import { CoreRuntime, IntelligenceRouter, StructuredTraceSink } from "../../../packages/core-runtime/src/index.js";
 import { Gemma2BOfflineSimulator } from "../../local/gemma2b-offline-simulator.js";
+import { createScenarioVoiceHarness } from "./voice-harness.js";
 import { loadScenarioFile, ScenarioRunner } from "./scenario.js";
 
 function loadRegistry(): DisplayRegistry {
@@ -47,10 +48,28 @@ async function main(): Promise<void> {
     trace: new StructuredTraceSink(() => {}),
   });
   const scenario = loadScenarioFile(scenarioPath);
-  const result = await new ScenarioRunner({ runtime, registry, timeScale, router }).run(scenario);
-  process.stdout.write(
-    `${JSON.stringify({ result, finalState: runtime.getState() }, null, 2)}\n`,
-  );
+  const hasVoiceSteps = scenario.timeline.some((step) => step.kind.startsWith("voice."));
+  const voiceHarness = hasVoiceSteps ? createScenarioVoiceHarness(runtime, router) : undefined;
+  try {
+    const result = await new ScenarioRunner({
+      runtime,
+      registry,
+      timeScale,
+      router,
+      ...(voiceHarness === undefined ? {} : { voice: voiceHarness.voice }),
+    }).run(scenario);
+    process.stdout.write(
+      `${JSON.stringify({
+        ...(voiceHarness === undefined ? {} : {
+          voiceSimulation: "mock provider path; no wake-word detection, real STT/TTS, microphone, device, or HMI WebSocket transport evidence",
+        }),
+        result,
+        finalState: runtime.getState(),
+      }, null, 2)}\n`,
+    );
+  } finally {
+    voiceHarness?.voice.close();
+  }
 }
 
 void main().catch((error: unknown) => {

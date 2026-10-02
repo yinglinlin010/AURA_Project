@@ -10,7 +10,7 @@
 - `VoiceRuntime` tracks `IDLE → LISTENING → TRANSCRIBING → THINKING → SPEAKING`, aborts playback on VAD interruption, and drops audio ducking on STOP/barge-in.
 - Streamed Gemini proposal tool calls go through the Intelligence Router's schema validation and local policy gate; tool calls never execute effects directly.
 - `Gemma2BOfflineSimulator` is an explicitly simulated, deterministic-only local fallback seam. It handles a small fixed set of cabin volume and temperature commands; it does not load a model or perform inference.
-- Google Places Text Search and Routes Compute REST adapters normalize results and emit metadata-only runtime signals. A fixture-backed weather adapter supplies deterministic local JSON.
+- Google Places Text Search and Routes Compute REST adapters normalize results and emit metadata-only runtime signals. The external stack exposes a separately named fixture weather adapter and a setting-controlled Open-Meteo adapter; the fixture is not a live fallback, and the Open-Meteo adapter is not called by host startup.
 - A local SQLite journey store retains user-authored journey inputs and Place IDs for at most seven days. Provider response content is transient and is not copied to the store or shared state.
 - Core-host factories wire the Router, voice runtime, local fallback, Gemini adapter, Maps adapters, weather fixture, and SQLite store without depending on a UI or a particular audio device.
 

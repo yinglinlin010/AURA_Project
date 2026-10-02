@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { ContextSignal } from "../../contracts/protocol/src/types.js";
+import type { ContextSignal, SignalFreshness, SignalSource } from "../../contracts/protocol/src/types.js";
 import type { TraceSink } from "../../packages/core-runtime/src/tracing.js";
 import { StructuredTraceSink } from "../../packages/core-runtime/src/tracing.js";
 import { asRecord, recordIntegrationSignal } from "../shared/http.js";
@@ -8,9 +8,19 @@ import { asRecord, recordIntegrationSignal } from "../shared/http.js";
 export interface WeatherObservation {
   location: string;
   observedAt: string;
+  validAt?: string;
+  retrievedAt?: string;
   temperatureCelsius: number;
   condition: string;
   precipitationProbability: number;
+  precipitationMillimeters?: number;
+  weatherCode?: number;
+  provider?: string;
+  source?: SignalSource;
+  freshness?: SignalFreshness;
+  attribution?: string;
+  attributionUrl?: string;
+  provenance?: { provider: string; observedAt: string; validAt?: string; source: SignalSource };
 }
 
 export interface MockWeatherAdapterOptions {
@@ -97,7 +107,8 @@ export function weatherAsContextSignal(observation: WeatherObservation, signalId
     signalId,
     type: "weather.observation",
     value: observation,
-    source: "derived",
+    source: observation.source ?? "derived",
     timestamp: Date.parse(observation.observedAt),
+    ...(observation.freshness === undefined ? {} : { freshness: observation.freshness }),
   };
 }

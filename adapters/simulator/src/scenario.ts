@@ -10,9 +10,10 @@ import type {
   ContextSignal,
   DisplayRegistry,
 } from "../../../contracts/protocol/src/types.js";
-import type { ScenarioDefinition, ScenarioStep } from "../../../contracts/scenarios/src/types.js";
+import type { ScenarioDefinition, ScenarioExpected, ScenarioStep, ScenarioVoiceState } from "../../../contracts/scenarios/src/types.js";
 import { CoreRuntime } from "../../../packages/core-runtime/src/index.js";
 import type { IntelligenceRouter } from "../../../packages/core-runtime/src/intelligence-router.js";
+import type { VoiceRuntime, VoiceRuntimeEvent, VoiceRuntimeState } from "../../../packages/core-runtime/src/voice-runtime.js";
 import { assessParkingAssistance } from "../../../packages/perception/src/parking-assistance.js";
 import { createSimulatedParkingObservation } from "../../perception/parking-context-simulator.js";
 
@@ -24,6 +25,7 @@ export interface ScenarioRunnerOptions {
   /** 1 follows authored timing; 0 replays immediately; values between them accelerate a run. */
   timeScale?: number;
   router?: IntelligenceRouter;
+  voice?: VoiceRuntime;
 }
 
 export interface ScenarioRunResult {
@@ -76,6 +78,19 @@ export interface ScenarioRunResult {
     stepId: string;
     activeWarning: import("../../../contracts/protocol/src/types.js").SafetyWarningState | null;
   }>;
+  voiceEvents: VoiceRuntimeEvent[];
+  initialVoiceState: VoiceRuntimeState | null;
+  expectationResults: Array<{ path: string; expected: unknown; actual: unknown; passed: true }>;
+  voiceStepObservations: Array<{
+    stepId: string;
+    kind: "voice.start" | "voice.text" | "voice.barge_in" | "voice.stop" | "voice.consent";
+    state: string;
+    proposalId?: string;
+    policyDecision?: { outcome: string; reasonCode: string; consentRequired: boolean };
+    consentStatus?: string;
+    consentAccepted?: boolean;
+    journeyStopIds?: string[];
+  }>;
 }
 
 export class ScenarioRunner {
@@ -85,6 +100,7 @@ export class ScenarioRunner {
   private readonly sleep: (durationMs: number) => Promise<void>;
   private readonly timeScale: number;
   private readonly router: IntelligenceRouter | undefined;
+  private readonly voice: VoiceRuntime | undefined;
 
   constructor(options: ScenarioRunnerOptions) {
     this.runtime = options.runtime;
@@ -93,6 +109,7 @@ export class ScenarioRunner {
     this.sleep = options.sleep ?? delay;
     this.timeScale = options.timeScale ?? 1;
     this.router = options.router;
+    this.voice = options.voice;
     if (!Number.isFinite(this.timeScale) || this.timeScale < 0) {
       throw new Error("INVALID_SCENARIO_TIME_SCALE");
     }
@@ -107,11 +124,17 @@ export class ScenarioRunner {
     const perceptionObservations: ScenarioRunResult["perceptionObservations"] = [];
     const proposalLifecycle: ScenarioRunResult["proposalLifecycle"] = [];
     const safetyObservations: ScenarioRunResult["safetyObservations"] = [];
+    const voiceEvents: VoiceRuntimeEvent[] = [];
+    const voiceStepObservations: ScenarioRunResult["voiceStepObservations"] = [];
+    const initialVoiceState = this.voice?.currentState ?? null;
+    const proposalAliases = new Map<string, string>();
+    const unsubscribeVoice = this.voice?.subscribe((event) => voiceEvents.push(event));
     const timeline = [...scenario.timeline].sort(
       (left, right) => left.atMs - right.atMs,
     );
     const traceId = `scenario:${scenario.id}`;
 
+    try {
     for (const step of timeline) {
       await this.sleepUntil(startedAt + step.atMs * this.timeScale);
       if (step.kind === "signal") {
@@ -209,6 +232,91 @@ export class ScenarioRunner {
           connectivityBefore: before.connectivity.mode,
           connectivityAfter: after.connectivity.mode,
         });
+      } else if (step.kind === "voice.start") {
+        if (!this.voice) throw new Error(`SCENARIO_VOICE_RUNTIME_REQUIRED:${step.id}`);
+        await this.voice.start(`scenario:${scenario.id}:${step.id}`);
+        voiceStepObservations.push({ stepId: step.id, kind: step.kind, state: this.voice.currentState });
+      } else if (step.kind === "voice.text") {
+        if (!this.voice) throw new Error(`SCENARIO_VOICE_RUNTIME_REQUIRED:${step.id}`);
+        const voiceTraceId = `scenario:${scenario.id}:${step.id}`;
+        const sequenceBefore = this.runtime.eventBus.sequence;
+        await this.voice.sendText(step.text, voiceTraceId);
+        const proposal = this.runtime.getState().activeProposals.find((candidate) => candidate.traceId === voiceTraceId);
+        const decisionEvent = this.runtime.eventBus.eventsAfter(sequenceBefore).find((event) =>
+          event.type === "proposal.policy.decided" && event.traceId === voiceTraceId,
+        );
+        if (step.proposalAlias) {
+          if (!proposal) throw new Error(`SCENARIO_VOICE_PROPOSAL_NOT_CREATED:${step.id}`);
+          proposalAliases.set(step.proposalAlias, proposal.proposalId);
+        }
+        voiceStepObservations.push({
+          stepId: step.id,
+          kind: step.kind,
+          state: this.voice.currentState,
+          ...(proposal ? { proposalId: proposal.proposalId } : {}),
+          ...(decisionEvent?.type === "proposal.policy.decided"
+            ? { policyDecision: {
+                outcome: decisionEvent.payload.decision.outcome,
+                reasonCode: decisionEvent.payload.decision.reasonCode,
+                consentRequired: decisionEvent.payload.decision.consentRequired,
+              } }
+            : {}),
+        });
+      } else if (step.kind === "voice.barge_in") {
+        if (!this.voice) throw new Error(`SCENARIO_VOICE_RUNTIME_REQUIRED:${step.id}`);
+        const frame = Buffer.alloc(640);
+        for (let offset = 0; offset < frame.length; offset += 2) frame.writeInt16LE(1000, offset);
+        await this.voice.sendAudioChunk(frame, "audio/pcm;rate=16000", `scenario:${scenario.id}:${step.id}`);
+        voiceStepObservations.push({ stepId: step.id, kind: step.kind, state: this.voice.currentState });
+      } else if (step.kind === "voice.stop") {
+        if (!this.voice) throw new Error(`SCENARIO_VOICE_RUNTIME_REQUIRED:${step.id}`);
+        await this.voice.stop(`scenario:${scenario.id}:${step.id}`, "VOICE_STOP_COMMAND");
+        voiceStepObservations.push({ stepId: step.id, kind: step.kind, state: this.voice.currentState });
+      } else if (step.kind === "voice.consent") {
+        const proposalId = proposalAliases.get(step.proposalAlias);
+        if (!proposalId) throw new Error(`SCENARIO_VOICE_PROPOSAL_ALIAS_NOT_FOUND:${step.proposalAlias}`);
+        const display = findEnabledDisplay(this.registry, step.displayId);
+        if (!display) throw new Error(`SCENARIO_DISPLAY_NOT_ENABLED:${step.displayId}`);
+        const commandId = `sim:${scenario.id}:${step.id}`;
+        const sequenceBefore = this.runtime.eventBus.sequence;
+        const consentReceipt = this.runtime.submitCommand({
+          protocolVersion: PROTOCOL_VERSION,
+          kind: "command",
+          messageId: commandId,
+          commandId,
+          sessionId: this.runtime.sessionId,
+          traceId: `scenario:${scenario.id}:${step.id}`,
+          sentAt: startedAt + step.atMs,
+          sender: { displayId: display.displayId, deviceId: display.deviceId },
+          command: { type: "action.consent", payload: { proposalId, decision: step.decision } },
+        });
+        commandReceipts.push(consentReceipt);
+        const consentEvents = this.runtime.eventBus.eventsAfter(sequenceBefore);
+        const consentAccepted = consentEvents.some((event) =>
+          event.type === "proposal.consent.recorded" &&
+          event.commandId === commandId &&
+          event.payload.proposalId === proposalId &&
+          event.payload.decision === step.decision,
+        );
+        const consentPolicyEvent = consentEvents.find((event) =>
+          event.type === "proposal.policy.decided" && event.commandId === commandId,
+        );
+        voiceStepObservations.push({
+          stepId: step.id,
+          kind: step.kind,
+          state: this.voice?.currentState ?? "UNAVAILABLE",
+          proposalId,
+          consentStatus: consentReceipt.status,
+          consentAccepted,
+          ...(consentPolicyEvent?.type === "proposal.policy.decided"
+            ? { policyDecision: {
+                outcome: consentPolicyEvent.payload.decision.outcome,
+                reasonCode: consentPolicyEvent.payload.decision.reasonCode,
+                consentRequired: consentPolicyEvent.payload.decision.consentRequired,
+              } }
+            : {}),
+          journeyStopIds: this.runtime.getState().journey.stops.map((stop) => stop.stopId),
+        });
       } else if (step.kind === "perception.parking") {
         const observation = createSimulatedParkingObservation(`scenario:${scenario.id}:${step.id}`, step.cues);
         const assessment = assessParkingAssistance(observation);
@@ -284,7 +392,17 @@ export class ScenarioRunner {
         activeWarning: state.activeSafetyWarning ? structuredClone(state.activeSafetyWarning) : null,
       });
     }
+    } finally {
+      unsubscribeVoice?.();
+    }
 
+    const expectationResults = assertVoiceExpectations(scenario.expected, {
+      initialVoiceState,
+      voiceEvents,
+      voiceStepObservations,
+      proposalAliases,
+      journeyStopIds: this.runtime.getState().journey.stops.map((stop) => stop.stopId),
+    });
     return {
       scenarioId: scenario.id,
       startedAt,
@@ -297,6 +415,10 @@ export class ScenarioRunner {
       perceptionObservations,
       proposalLifecycle,
       safetyObservations,
+      voiceEvents,
+      initialVoiceState,
+      expectationResults,
+      voiceStepObservations,
     };
   }
 
@@ -325,6 +447,91 @@ export function assertScenarioDefinition(value: unknown): asserts value is Scena
     if (stepIds.has(step.id)) throw new Error(`DUPLICATE_SCENARIO_STEP_ID:${step.id}`);
     stepIds.add(step.id);
   }
+}
+
+function assertVoiceExpectations(
+  expected: ScenarioExpected | undefined,
+  actual: {
+    initialVoiceState: VoiceRuntimeState | null;
+    voiceEvents: VoiceRuntimeEvent[];
+    voiceStepObservations: ScenarioRunResult["voiceStepObservations"];
+    proposalAliases: Map<string, string>;
+    journeyStopIds: string[];
+  },
+): ScenarioRunResult["expectationResults"] {
+  const voiceExpected = expected?.voice;
+  if (!voiceExpected) return [];
+  const results: ScenarioRunResult["expectationResults"] = [];
+  const check = (path: string, wanted: unknown, observed: unknown): void => {
+    if (JSON.stringify(wanted) !== JSON.stringify(observed)) {
+      const expectedText = JSON.stringify(wanted) ?? "undefined";
+      const actualText = JSON.stringify(observed) ?? "undefined";
+      throw new Error(`SCENARIO_EXPECTATION_FAILED:${path}:expected=${expectedText}:actual=${actualText}`);
+    }
+    results.push({ path, expected: wanted, actual: observed, passed: true });
+  };
+
+  for (const policyExpected of voiceExpected.policyDecisions ?? []) {
+    const observation = actual.voiceStepObservations.find((item) => item.stepId === policyExpected.stepId);
+    const decision = observation?.policyDecision;
+    check(`voice.policyDecisions.${policyExpected.stepId}.outcome`, policyExpected.outcome, decision?.outcome);
+    if (policyExpected.reasonCode !== undefined) {
+      check(`voice.policyDecisions.${policyExpected.stepId}.reasonCode`, policyExpected.reasonCode, decision?.reasonCode);
+    }
+    if (policyExpected.consentRequired !== undefined) {
+      check(`voice.policyDecisions.${policyExpected.stepId}.consentRequired`, policyExpected.consentRequired, decision?.consentRequired);
+    }
+  }
+
+  for (const consentExpected of voiceExpected.consents ?? []) {
+    const observation = actual.voiceStepObservations.find((item) => item.stepId === consentExpected.stepId);
+    check(`voice.consents.${consentExpected.stepId}.proposalId`, actual.proposalAliases.get(consentExpected.proposalAlias), observation?.proposalId);
+    check(`voice.consents.${consentExpected.stepId}.accepted`, consentExpected.accepted, observation?.consentAccepted);
+    if (consentExpected.receiptStatus !== undefined) {
+      check(`voice.consents.${consentExpected.stepId}.receiptStatus`, consentExpected.receiptStatus, observation?.consentStatus);
+    }
+  }
+
+  if (voiceExpected.journey) {
+    const expectedStopIds = voiceExpected.journey.stopProposalAliases.map((alias) => {
+      const proposalId = actual.proposalAliases.get(alias);
+      if (!proposalId) throw new Error(`SCENARIO_EXPECTATION_FAILED:voice.journey.stopProposalAliases:unknown_alias=${alias}`);
+      return proposalId;
+    });
+    check("voice.journey.stopCount", voiceExpected.journey.stopCount, actual.journeyStopIds.length);
+    check("voice.journey.stopProposalAliases", expectedStopIds, actual.journeyStopIds);
+  }
+
+  for (const stateExpected of voiceExpected.statesAtSteps ?? []) {
+    const observation = actual.voiceStepObservations.find((item) => item.stepId === stateExpected.stepId);
+    check(`voice.statesAtSteps.${stateExpected.stepId}`, stateExpected.state, observation?.state);
+  }
+
+  if (voiceExpected.requiredTransitions?.length) {
+    const states: ScenarioVoiceState[] = [];
+    if (actual.initialVoiceState !== null) states.push(actual.initialVoiceState);
+    for (const event of actual.voiceEvents) {
+      if (event.type === "state") states.push(event.state);
+    }
+    const transitions = states.slice(1).map((to, index) => ({ from: states[index]!, to }));
+    let cursor = 0;
+    for (const required of voiceExpected.requiredTransitions) {
+      const foundAt = transitions.findIndex((transition, index) =>
+        index >= cursor && transition.from === required.from && transition.to === required.to,
+      );
+      if (foundAt < 0) {
+        throw new Error(`SCENARIO_EXPECTATION_FAILED:voice.requiredTransitions:missing=${required.from}->${required.to}:actual=${JSON.stringify(transitions)}`);
+      }
+      cursor = foundAt + 1;
+      results.push({
+        path: `voice.requiredTransitions.${required.from}->${required.to}`,
+        expected: required,
+        actual: transitions[foundAt],
+        passed: true,
+      });
+    }
+  }
+  return results;
 }
 
 let scenarioValidator: ValidateFunction | undefined;

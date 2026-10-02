@@ -146,7 +146,7 @@ export class OllamaProposalModel {
     } catch {
       throw new Error("OLLAMA_LABEL_SCHEMA_UNAVAILABLE");
     }
-    const ajv = new Ajv({ allErrors: true, strict: false });
+  const ajv = new Ajv.default({ allErrors: true, strict: false });
     const validator = ajv.compile(schema as AnySchema);
     this.validator = validator;
     this.labelSchema = schema as AnySchema;

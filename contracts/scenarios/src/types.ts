@@ -1,4 +1,35 @@
-import type { AuraCommand, CognitiveLoadLevel, Gear, ProposalPriority, VehicleState } from "../../protocol/src/types.js";
+import type { AuraCommand, CognitiveLoadLevel, Gear, PolicyOutcome, ProposalPriority, VehicleState } from "../../protocol/src/types.js";
+
+export type ScenarioVoiceState = "IDLE" | "LISTENING" | "TRANSCRIBING" | "THINKING" | "SPEAKING";
+
+export interface ScenarioExpected {
+  voice?: {
+    policyDecisions?: Array<{
+      stepId: string;
+      outcome: PolicyOutcome;
+      reasonCode?: string;
+      consentRequired?: boolean;
+    }>;
+    consents?: Array<{
+      stepId: string;
+      proposalAlias: string;
+      accepted: boolean;
+      receiptStatus?: "RECEIVED" | "REJECTED";
+    }>;
+    journey?: {
+      stopCount: number;
+      stopProposalAliases: string[];
+    };
+    statesAtSteps?: Array<{
+      stepId: string;
+      state: ScenarioVoiceState;
+    }>;
+    requiredTransitions?: Array<{
+      from: ScenarioVoiceState;
+      to: ScenarioVoiceState;
+    }>;
+  };
+}
 
 export interface ScenarioSignalInput {
   type: string;
@@ -43,6 +74,24 @@ export type ScenarioStep =
       kind: "perception.parking";
       proposalId: string;
       cues: Array<"parking_maneuver_active" | "repeated_adjustment" | "unfamiliar_parking_context" | "driver_requested_guidance">;
+    }
+  | { id: string; atMs: number; kind: "voice.start" }
+  | {
+      id: string;
+      atMs: number;
+      kind: "voice.text";
+      text: string;
+      proposalAlias?: string;
+    }
+  | { id: string; atMs: number; kind: "voice.barge_in" }
+  | { id: string; atMs: number; kind: "voice.stop" }
+  | {
+      id: string;
+      atMs: number;
+      kind: "voice.consent";
+      proposalAlias: string;
+      displayId: string;
+      decision: "approve" | "decline";
     };
 
 export interface ScenarioDefinition {
@@ -50,6 +99,7 @@ export interface ScenarioDefinition {
   name: string;
   description?: string;
   timeline: ScenarioStep[];
+  expected?: ScenarioExpected;
 }
 
 export type { CognitiveLoadLevel, Gear, ProposalPriority, VehicleState };

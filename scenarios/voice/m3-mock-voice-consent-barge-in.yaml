@@ -1,0 +1,65 @@
+id: m3-mock-voice-consent-barge-in
+name: Mock voice proposal, consent, barge-in, and stop
+description: >-
+  Credential-free mock provider scenario. voice.start represents a session-level
+  touch invocation; voice.text is already-normalized text, not a microphone or
+  STT result. It exercises Action Gate, Center consent, shared Journey update,
+  mock output cancellation on barge-in, and explicit stop. It does not evidence
+  wake-word detection, real STT/TTS, browser audio, or an HMI WebSocket session.
+timeline:
+  - id: touch-invocation
+    atMs: 0
+    kind: voice.start
+  - id: normalized-voice-request
+    atMs: 100
+    kind: voice.text
+    text: Add a coffee stop to the trip
+    proposalAlias: coffee-stop
+  - id: center-consents
+    atMs: 200
+    kind: voice.consent
+    proposalAlias: coffee-stop
+    displayId: center-main
+    decision: approve
+  - id: driver-barges-in
+    atMs: 300
+    kind: voice.barge_in
+  - id: driver-stops-voice
+    atMs: 400
+    kind: voice.stop
+expected:
+  voice:
+    policyDecisions:
+      - stepId: normalized-voice-request
+        outcome: ROUTE
+        consentRequired: true
+      - stepId: center-consents
+        outcome: EXECUTE
+        consentRequired: true
+    consents:
+      - stepId: center-consents
+        proposalAlias: coffee-stop
+        accepted: true
+        receiptStatus: RECEIVED
+    journey:
+      stopCount: 1
+      stopProposalAliases:
+        - coffee-stop
+    statesAtSteps:
+      - stepId: driver-barges-in
+        state: LISTENING
+      - stepId: driver-stops-voice
+        state: IDLE
+    requiredTransitions:
+      - from: IDLE
+        to: LISTENING
+      - from: LISTENING
+        to: TRANSCRIBING
+      - from: TRANSCRIBING
+        to: THINKING
+      - from: THINKING
+        to: SPEAKING
+      - from: SPEAKING
+        to: LISTENING
+      - from: LISTENING
+        to: IDLE

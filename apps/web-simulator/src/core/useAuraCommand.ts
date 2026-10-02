@@ -53,6 +53,14 @@ export interface DiscoveryState {
 }
 export interface SharedSafetyWarning { warningId: string; signalId: string; signalType: string; severity: 'critical'; source: 'sensor' | 'simulated' | 'api' | 'derived' | 'cache'; freshness: 'fresh' | 'cached' | 'stale' | 'unknown'; activatedAt: number; }
 export interface DisplayConnection { status: GatewayStatus; sessionId: string | null; deviceId: string; role: DisplayRole; lastMessage: string; }
+export interface RecommendationProposal { proposalId: string; kind: string; summary: string; targetRole: string; priority: string; requiresConsent: boolean; payload: Record<string, unknown>; }
+export type JourneyRecommendationState =
+  | { status: 'idle'; requestId: null; requestText: '' }
+  | { status: 'pending'; requestId: string; requestText: string }
+  | { status: 'proposal'; requestId: string; requestText: string; proposal: RecommendationProposal; submissionError?: string }
+  | { status: 'submitted'; requestId: string; requestText: string; proposal: RecommendationProposal; commandId: string }
+  | { status: 'abstained'; requestId: string; requestText: string; reasonCode: string }
+  | { status: 'error'; requestId: string | null; requestText: string; errorCode: string; message: string };
 export interface GatewayState {
   speedKph: number;
   load: LoadLevel;
@@ -76,6 +84,7 @@ const initialState: GatewayState = {
 const emptySearch = (): DiscoverySearchState => ({ status: 'idle', requestId: null, results: [], observedAt: null, errorCode: null });
 const emptyRoute = (): DiscoveryRouteState => ({ status: 'idle', requestId: null, routes: [], provider: null, source: null, observedAt: null, freshness: null, attribution: null, attributionUrl: null, errorCode: null });
 const traceId = () => `web-simulator:${crypto.randomUUID()}`;
+const emptyRecommendation = (): JourneyRecommendationState => ({ status: 'idle', requestId: null, requestText: '' });
 const updateProposal = (proposals: SharedProposal[], next: SharedProposal) => {
   const index = proposals.findIndex((proposal) => proposal.proposalId === next.proposalId);
   return index < 0 ? [...proposals, next] : proposals.map((proposal, i) => i === index ? { ...proposal, ...next } : proposal);
@@ -89,6 +98,10 @@ export function useAuraCommand() {
   const playbackSourcesRef = useRef(new Set<AudioBufferSourceNode>());
   const voiceAttemptRef = useRef(0);
   const voiceTraceRef = useRef<string | null>(null);
+  const recommendationRequestRef = useRef<{ requestId: string; traceId: string } | null>(null);
+  const recommendationTextRef = useRef('');
+  const recommendationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recommendationStateRef = useRef<JourneyRecommendationState>(emptyRecommendation());
   const voiceStatusRef = useRef<VoiceStatus>('IDLE');
   const audioOutputActiveRef = useRef(false);
   const outputSampleRateRef = useRef(24000);
@@ -96,7 +109,9 @@ export function useAuraCommand() {
   const [voice, setVoice] = useState<VoiceState>({ status: 'IDLE', inputTranscript: '', outputTranscript: '', error: null });
   const [state, setState] = useState<GatewayState>(initialState);
   const [discovery, setDiscovery] = useState<DiscoveryState>({ origin: emptySearch(), destination: emptySearch(), route: emptyRoute() });
+  const [recommendation, setRecommendation] = useState<JourneyRecommendationState>(emptyRecommendation);
   stateRef.current = state;
+  recommendationStateRef.current = recommendation;
   voiceStatusRef.current = voice.status;
 
   const updateVoice = useCallback((changes: Partial<VoiceState>) => {
@@ -247,6 +262,21 @@ export function useAuraCommand() {
               attributionUrl: typeof data.attributionUrl === 'string' ? data.attributionUrl : null,
               errorCode: typeof data.errorCode === 'string' ? data.errorCode : null,
             } }));
+          } else if (data.kind === 'journey.recommendation.result' && registration.displayId === 'center-main') {
+            if (data.requestId !== recommendationRequestRef.current?.requestId) return;
+            recommendationRequestRef.current = null;
+            if (recommendationTimeoutRef.current) clearTimeout(recommendationTimeoutRef.current);
+            recommendationTimeoutRef.current = null;
+            if (data.status === 'abstained' && typeof data.reasonCode === 'string') {
+              setRecommendation({ status: 'abstained', requestId: data.requestId, requestText: recommendationTextRef.current, reasonCode: data.reasonCode });
+            } else if (data.status === 'proposal' && data.centerProposal &&
+              typeof data.centerProposal.proposalId === 'string' && data.centerProposal.kind === 'ADD_TRIP_STOP' &&
+              data.centerProposal.targetRole === 'center' && data.centerProposal.requiresConsent === true &&
+              typeof data.centerProposal.summary === 'string' && data.centerProposal.payload && typeof data.centerProposal.payload === 'object') {
+              setRecommendation({ status: 'proposal', requestId: data.requestId, requestText: recommendationTextRef.current, proposal: data.centerProposal });
+            } else {
+              setRecommendation({ status: 'error', requestId: data.requestId, requestText: recommendationTextRef.current, errorCode: 'INVALID_RECOMMENDATION_RESULT', message: 'The Gateway returned a recommendation response that does not include a consent-required Center proposal.' });
+            }
           } else if (data.kind === 'voice.status' && registration.displayId === 'center-main') {
             updateVoice({ status: data.state, error: data.state === 'IDLE' ? null : undefined });
             if (data.state === 'IDLE') {
@@ -269,6 +299,10 @@ export function useAuraCommand() {
           } else if (data.kind === 'ack') {
             const receipt = data.receipt;
             setConnection({ lastMessage: `Command ${receipt?.status ?? 'acknowledged'}${receipt?.reasonCode ? ` · ${receipt.reasonCode}` : ''}` });
+            const pendingRecommendation = recommendationStateRef.current;
+            if (registration.displayId === 'center-main' && receipt?.status === 'REJECTED' && pendingRecommendation.status === 'submitted' && receipt.commandId === pendingRecommendation.commandId) {
+              setRecommendation({ status: 'proposal', requestId: pendingRecommendation.requestId, requestText: pendingRecommendation.requestText, proposal: pendingRecommendation.proposal, submissionError: receipt.reasonCode ?? 'ACTION_PROPOSAL_REJECTED' });
+            }
           } else if (data.kind === 'error') {
             setConnection({ ...(data.code === 'DISPLAY_REGISTRATION_REJECTED' ? { status: 'error' as const } : {}), lastMessage: `${data.code}: ${data.message}` });
             // Discovery requests that fail gateway-side validation or role
@@ -281,6 +315,13 @@ export function useAuraCommand() {
               destination: current.destination.status === 'loading' ? { ...current.destination, status: 'error', errorCode: data.code ?? 'PASSENGER_GATEWAY_ERROR' } : current.destination,
               route: current.route.status === 'loading' ? { ...current.route, status: 'error', errorCode: data.code ?? 'PASSENGER_GATEWAY_ERROR' } : current.route,
             }));
+            const pendingRequest = recommendationRequestRef.current;
+            if (registration.displayId === 'center-main' && pendingRequest !== null && pendingRequest.traceId === data.traceId) {
+              recommendationRequestRef.current = null;
+              if (recommendationTimeoutRef.current) clearTimeout(recommendationTimeoutRef.current);
+              recommendationTimeoutRef.current = null;
+              setRecommendation({ status: 'error', requestId: pendingRequest.requestId, requestText: recommendationTextRef.current, errorCode: data.code ?? 'JOURNEY_RECOMMENDATION_ERROR', message: data.message ?? 'The Gateway could not process this request.' });
+            }
             if (registration.displayId === 'center-main' && (voiceTraceRef.current || voiceStatusRef.current === 'CONNECTING')) {
               audioOutputActiveRef.current = false;
               releaseCapture();
@@ -296,6 +337,13 @@ export function useAuraCommand() {
         socket.addEventListener('close', () => {
           setConnection({ status: 'disconnected', sessionId: null, lastMessage: 'Gateway connection closed' });
           if (registration.displayId === 'front-passenger-main') setDiscovery({ origin: emptySearch(), destination: emptySearch(), route: emptyRoute() });
+          if (registration.displayId === 'center-main' && recommendationRequestRef.current) {
+            const pendingRequest = recommendationRequestRef.current;
+            recommendationRequestRef.current = null;
+            if (recommendationTimeoutRef.current) clearTimeout(recommendationTimeoutRef.current);
+            recommendationTimeoutRef.current = null;
+            setRecommendation({ status: 'error', requestId: pendingRequest.requestId, requestText: recommendationTextRef.current, errorCode: 'CENTER_GATEWAY_DISCONNECTED', message: 'The Center Gateway disconnected before the recommendation returned.' });
+          }
           if (registration.displayId === 'center-main' && voiceStatusRef.current !== 'IDLE') {
             audioOutputActiveRef.current = false;
             releaseCapture();
@@ -307,7 +355,7 @@ export function useAuraCommand() {
         setState((current) => ({ ...current, connections: { ...current.connections, [registration.displayId]: { ...current.connections[registration.displayId], status: 'error', lastMessage: 'Could not open gateway connection' } } }));
       }
     }
-    return () => { releaseCapture(); sockets.forEach((socket) => socket.close()); socketsRef.current = {}; };
+    return () => { releaseCapture(); if (recommendationTimeoutRef.current) clearTimeout(recommendationTimeoutRef.current); recommendationTimeoutRef.current = null; recommendationRequestRef.current = null; sockets.forEach((socket) => socket.close()); socketsRef.current = {}; };
   }, [playPcm, releaseCapture, updateVoice]);
 
   const startVoice = useCallback(async () => {
@@ -441,7 +489,7 @@ export function useAuraCommand() {
     return wasActive;
   }, [releaseCapture, updateVoice]);
 
-  const sendCommand = useCallback((displayId: DisplayId, command: { type: string; payload: Record<string, unknown> }) => {
+  const sendCommand = useCallback((displayId: DisplayId, command: { type: string; payload: Record<string, unknown> }, onSent?: (commandId: string) => void) => {
     const socket = socketsRef.current[displayId];
     const sessionId = state.connections[displayId].sessionId;
     if (!socket || socket.readyState !== WebSocket.OPEN || !sessionId) {
@@ -449,6 +497,7 @@ export function useAuraCommand() {
       return false;
     }
     const id = crypto.randomUUID();
+    onSent?.(id);
     socket.send(JSON.stringify({
       kind: 'command',
       envelope: {
@@ -500,5 +549,48 @@ export function useAuraCommand() {
     return sent;
   }, [sendDiscovery]);
 
-  return { state, sendCommand, voice, startVoice, stopVoice, discovery, searchPlaces, previewRoute };
+  const requestJourneyRecommendation = useCallback((requestText: string) => {
+    const trimmed = requestText.trim();
+    if (!trimmed || trimmed.length > 1000) {
+      setRecommendation({ status: 'error', requestId: null, requestText: trimmed.slice(0, 1000), errorCode: 'REQUEST_TEXT_INVALID', message: trimmed ? 'Keep the request to 1,000 characters or fewer.' : 'Enter a natural-language journey request first.' });
+      return false;
+    }
+    const displayId: DisplayId = 'center-main';
+    const socket = socketsRef.current[displayId];
+    const connection = stateRef.current.connections[displayId];
+    if (!socket || socket.readyState !== WebSocket.OPEN || !connection.sessionId) {
+      setRecommendation({ status: 'error', requestId: null, requestText: trimmed, errorCode: 'CENTER_GATEWAY_UNAVAILABLE', message: `Center Gateway is ${connection.status}; connect before requesting a recommendation.` });
+      return false;
+    }
+    if (recommendationTimeoutRef.current) clearTimeout(recommendationTimeoutRef.current);
+    const requestId = crypto.randomUUID();
+    const requestTraceId = traceId();
+    recommendationRequestRef.current = { requestId, traceId: requestTraceId };
+    recommendationTextRef.current = trimmed;
+    setRecommendation({ status: 'pending', requestId, requestText: trimmed });
+    try {
+      socket.send(JSON.stringify({ kind: 'journey.recommendation.request', protocolVersion: PROTOCOL_VERSION, requestId, traceId: requestTraceId, requestText: trimmed }));
+    } catch (error) {
+      recommendationRequestRef.current = null;
+      setRecommendation({ status: 'error', requestId, requestText: trimmed, errorCode: 'RECOMMENDATION_SEND_FAILED', message: error instanceof Error ? error.message : 'The request could not be sent to the Center Gateway.' });
+      return false;
+    }
+    recommendationTimeoutRef.current = setTimeout(() => {
+      if (recommendationRequestRef.current?.requestId !== requestId) return;
+      recommendationRequestRef.current = null;
+      recommendationTimeoutRef.current = null;
+      setRecommendation({ status: 'error', requestId, requestText: trimmed, errorCode: 'RECOMMENDATION_TIMEOUT', message: 'No recommendation result arrived within 30 seconds. You can try again.' });
+    }, 30_000);
+    return true;
+  }, []);
+
+  const submitJourneyRecommendation = useCallback((proposal: RecommendationProposal) => {
+    if (recommendation.status !== 'proposal' || recommendation.proposal.proposalId !== proposal.proposalId) return false;
+    let commandId = '';
+    const sent = sendCommand('center-main', { type: 'action.propose', payload: { proposal } }, (id) => { commandId = id; });
+    if (sent) setRecommendation({ status: 'submitted', requestId: recommendation.requestId, requestText: recommendation.requestText, proposal, commandId });
+    return sent;
+  }, [recommendation, sendCommand]);
+
+  return { state, sendCommand, voice, startVoice, stopVoice, discovery, searchPlaces, previewRoute, recommendation, requestJourneyRecommendation, submitJourneyRecommendation };
 }

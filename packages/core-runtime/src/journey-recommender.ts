@@ -65,6 +65,8 @@ export interface JourneyRecommendationEvidenceSource {
   getEvidence(input: {
     requestText: string;
     state: Readonly<AuraSharedState>;
+    /** Optional deterministic clock forwarded by the caller for freshness checks. */
+    now?: number;
   }): Promise<WholeJourneyEvidence | null>;
 }
 
@@ -121,7 +123,7 @@ export function scoreJourneyOptions(options: JourneyOption[], now = Date.now()):
       rationale.push(slack >= 0 ? `${slack} min deadline margin.` : `${Math.abs(slack)} min past the arrival deadline.`);
     }
     apply(option.walkingDistanceKm, 5, (v) => 1 - numeric(v, 0, 5) / 2.5, (v) => `${numeric(v, 0, 5)} km walking distance.`);
-    apply(option.preferenceFit, 8, (v) => (numeric(v, 0, 1) - 0.5) * 2, () => "Matches stated preferences.");
+    apply(option.preferenceFit, 8, (v) => (numeric(v, 0, 1) - 0.5) * 2, (v) => `Preference-fit score ${numeric(v, 0, 1).toFixed(2)}/1.`);
     apply(option.nearbyFollowUps, 5, (v) => numeric(v.length, 0, 3) / 3, (v) => `${v.length} nearby follow-up option(s).`);
     return { option, score, rationale, used, simulated };
   }).sort((a, b) => b.score - a.score || a.option.placeId.localeCompare(b.option.placeId));
@@ -141,7 +143,7 @@ export function scoreJourneyOptions(options: JourneyOption[], now = Date.now()):
   const rationale = [...best.rationale];
   if (scored[1]) {
     const other = scored[1];
-    rationale.push(`Tradeoff: ${best.option.label} ranks above ${other.option.label} (${best.score.toFixed(1)} vs ${other.score.toFixed(1)}); compare the listed route, parking, deadline, and preference factors.`);
+    rationale.push(describeTradeoff(best, other, now));
   }
   return {
     selected: best.option,
@@ -176,7 +178,6 @@ export async function recommendWholeJourney(input: {
   now?: number;
 }): Promise<JourneyRecommendationResultMessage> {
   const { message } = input;
-  const now = input.now ?? Date.now();
   const abstain = (reasonCode: string): JourneyRecommendationResultMessage => ({
     kind: "journey.recommendation.result",
     protocolVersion: 1,
@@ -190,11 +191,19 @@ export async function recommendWholeJourney(input: {
 
   let evidence: WholeJourneyEvidence | null;
   try {
-    evidence = await input.source.getEvidence({ requestText: message.requestText, state: input.state });
+    evidence = await input.source.getEvidence({
+      requestText: message.requestText,
+      state: input.state,
+      ...(input.now === undefined ? {} : { now: input.now }),
+    });
   } catch {
     return abstain("WHOLE_JOURNEY_EVIDENCE_SOURCE_FAILED");
   }
   if (!evidence) return abstain("WHOLE_JOURNEY_EVIDENCE_UNAVAILABLE");
+
+  // Use post-fetch wall time so evidence stamped during the async source call is not rejected as future.
+  // An injected clock remains fixed for deterministic callers and is forwarded to the source above.
+  const now = input.now ?? Date.now();
 
   if (
     !validAnchorEvidence(evidence.origin, now, true) ||
@@ -294,11 +303,35 @@ function validRoute(value: { distanceMeters: number; durationMinutes: number }):
 
 function evidenceSummary(option: JourneyOption, now: number): Array<{ criterion: string; source: SignalSource; sourceLabel: string; observedAt: number; freshness: SignalFreshness }> {
   return Object.entries(option)
-    .filter(([key, value]) => key !== "placeId" && key !== "label" && key !== "category" && usable(value as JourneyEvidence<unknown> | undefined, now))
+    .filter(([key, value]) => key !== "placeId" && key !== "label" && key !== "category" && key !== "identityEvidence" && usable(value as JourneyEvidence<unknown> | undefined, now))
     .map(([criterion, value]) => {
       const evidence = value as JourneyEvidence<unknown>;
       return { criterion, source: evidence.source, sourceLabel: evidence.sourceLabel, observedAt: evidence.observedAt, freshness: evidence.freshness };
     });
+}
+
+function describeTradeoff(best: ScoredOption, other: ScoredOption, now: number): string {
+  const factors: string[] = [];
+  if (usable(best.option.poiQuality, now) && usable(other.option.poiQuality, now)) {
+    factors.push(`POI rating ${numeric(best.option.poiQuality.value, 0, 5).toFixed(1)} vs ${numeric(other.option.poiQuality.value, 0, 5).toFixed(1)}/5`);
+  }
+  if (usable(best.option.detourMinutes, now) && usable(other.option.detourMinutes, now)) {
+    factors.push(`detour ${numeric(best.option.detourMinutes.value, 0, 60)} vs ${numeric(other.option.detourMinutes.value, 0, 60)} min`);
+  }
+  if (usable(best.option.parkingAvailability, now) && usable(other.option.parkingAvailability, now)) {
+    factors.push(`parking ${best.option.parkingAvailability.value} vs ${other.option.parkingAvailability.value}`);
+  }
+  if (usable(best.option.arrivalMinutes, now) && usable(best.option.deadlineMinutes, now) &&
+      usable(other.option.arrivalMinutes, now) && usable(other.option.deadlineMinutes, now)) {
+    const bestSlack = best.option.deadlineMinutes.value - best.option.arrivalMinutes.value;
+    const otherSlack = other.option.deadlineMinutes.value - other.option.arrivalMinutes.value;
+    factors.push(`deadline margin ${bestSlack} vs ${otherSlack} min`);
+  }
+  if (usable(best.option.nearbyFollowUps, now) && usable(other.option.nearbyFollowUps, now)) {
+    factors.push(`nearby follow-ups ${best.option.nearbyFollowUps.value.length} vs ${other.option.nearbyFollowUps.value.length}`);
+  }
+  const comparison = factors.length > 0 ? factors.join(", ") : "no shared fresh comparison factors";
+  return `Tradeoff: ${best.option.label.slice(0, 64)} (${best.score.toFixed(1)}) over ${other.option.label.slice(0, 64)} (${other.score.toFixed(1)}); ${comparison}.`;
 }
 
 function evidenceSummaryItem(criterion: string, evidence: JourneyEvidence<unknown>): { criterion: string; source: SignalSource; sourceLabel: string; observedAt: number; freshness: SignalFreshness } {

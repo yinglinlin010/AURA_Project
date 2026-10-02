@@ -103,6 +103,16 @@ function pcmRms(data: Buffer): number {
 
 function makeMockCandidate(text: string): unknown {
   const normalized = text.toLowerCase();
+  if (/\b(add|find|coffee|cafe|café)\b/.test(normalized)) {
+    return {
+      kind: "ADD_TRIP_STOP",
+      summary: "Add a mock cafe stop to the journey",
+      targetRole: "center",
+      priority: "normal",
+      requiresConsent: true,
+      payload: { label: "Mock Cafe", category: "cafe", placeId: "mock-voice-cafe", source: "mock-voice" },
+    };
+  }
   const increase = /\b(up|increase|raise|louder)\b/.test(normalized);
   return {
     kind: "CHANGE_CABIN_SETTING",

@@ -39,7 +39,7 @@ export interface MapboxDirectionsOptions {
 export class MapboxDirectionsAdapter {
   private readonly accessToken: string | undefined;
   private readonly endpoint: string;
-  private readonly fetchImpl?: typeof fetch;
+  private readonly fetchImpl: typeof fetch | undefined;
   private readonly timeoutMs: number;
   private readonly sessionId: string;
   private readonly trace: TraceSink;
