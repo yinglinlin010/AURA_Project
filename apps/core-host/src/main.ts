@@ -11,6 +11,7 @@ import { createExternalAdapterStack, hasWeatherConfiguration } from "./external-
 import { SqliteJourneyStore } from "../../../adapters/persistence/sqlite-journey-store.js";
 import { ACTIVE_JOURNEY_ID, persistJourney, restoreJourney } from "./journey-persistence.js";
 import { brandFromEnvironment } from "../../../packages/core-domain/src/brand.js";
+import { HttpConnectivityMonitor } from "../../../adapters/connectivity/http-connectivity-monitor.js";
 
 function loadRegistry(): DisplayRegistry {
   const configPath = process.env.AURA_DISPLAY_REGISTRY ??
@@ -52,11 +53,22 @@ async function main(): Promise<void> {
     ...(journeyRecommendations === undefined ? {} : { journeyRecommendations }),
     ...(externalAdapters === undefined ? {} : { places: externalAdapters.places, routing: externalAdapters.routing }),
   });
+  const connectivityMonitor = process.env.AURA_CONNECTIVITY_PROBE_URL?.trim()
+    ? new HttpConnectivityMonitor({
+        endpoint: process.env.AURA_CONNECTIVITY_PROBE_URL.trim(),
+        report: (update) => runtime.updateConnectivity(update),
+        ...(process.env.AURA_CONNECTIVITY_PROBE_INTERVAL_MS?.trim()
+          ? { intervalMs: Number(process.env.AURA_CONNECTIVITY_PROBE_INTERVAL_MS) }
+          : {}),
+      })
+    : undefined;
   await gateway.start();
+  connectivityMonitor?.start();
   process.stdout.write(`${brand.productName} Core HMI Gateway listening at ${gateway.address()}\n`);
 
   const shutdown = async () => {
     try {
+      if (connectivityMonitor) await connectivityMonitor.stop();
       await gateway.close();
     } finally {
       if (externalAdapters) externalAdapters.close();

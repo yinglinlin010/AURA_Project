@@ -16,6 +16,8 @@ Connectivity updates replace only the connectivity record. They preserve the run
 
 The web Control Console exposes **Set network online / degraded / offline** buttons. Those buttons send `connectivity.mode.report`; Core Runtime ingests it as a `connectivity.mode` signal with `source: simulated`, publishes the normal shared state event, and leaves every non-connectivity state field intact. All five logical browser sockets receive the event and reconnect snapshots retain the selected mode. The display source label remains visible so this control cannot be mistaken for an operating-system connectivity probe.
 
+Core Host can also probe an operator-configured, unauthenticated HTTP health endpoint by setting `AURA_CONNECTIVITY_PROBE_URL`. The monitor sends a side-effect-free `HEAD` request every 15 seconds by default; `AURA_CONNECTIVITY_PROBE_INTERVAL_MS` changes the interval (1–300 seconds). The endpoint must use HTTP(S), return 2xx when healthy, and contain no credentials, query string, or fragment. Two consecutive healthy responses are required for `online`; a healthy response while recovering remains `degraded`. A non-2xx HTTP response means `degraded`; three consecutive network failures or timeouts mean `offline`. Reports have `source: api` and bounded evidence codes. This reflects only the configured endpoint's reachability/health contract, not all internet access or Maps, Weather, Gemini, or Ollama availability. Provider calls continue to supply their own success/error evidence.
+
 ## Routing behavior
 
 - Deterministic local commands (currently the explicit simulator adapter) remain available in all connectivity modes.
@@ -36,4 +38,4 @@ The CLI's scenario cloud provider is a deterministic in-process fixture and the 
 
 ## Verification boundary
 
-Automated evidence: the multi-client Gateway test submits a simulated offline transition, verifies one shared event reaches all five connected clients, checks `source: simulated` and command/trace lineage, confirms shared state changes, and verifies a reconnect snapshot retains offline state. Live network detection, network-interface transitions, provider behavior, and physical display behavior remain unverified.
+Automated evidence: monitor tests cover a real local HTTP HEAD exchange, healthy debounce, repeated network failure/recovery, timeout, HTTP unhealthy responses, endpoint validation and provenance; the multi-client Gateway test submits a simulated offline transition, verifies one shared event reaches all five connected clients, checks `source: simulated` and command/trace lineage, confirms the offline router avoids cloud, and verifies a reconnect snapshot retains offline state. The configured deployment endpoint, OS network transitions, actual provider availability and physical display behavior remain unverified.
