@@ -290,7 +290,7 @@ function RearDisplay() {
 
 function WindowDisplay() {
   return <section className="device window-device" aria-label="Interactive window preview">
-    <div className="window-scene"><div className="window-photo"><img src={windowReference} alt=""/></div><div className="window-status"><span><b>19:42</b><small>THU 26 OCT</small></span><span><b>12°C <Icon name="cloud" size={21}/></b><small>RAIN · 14 pt</small></span><span><b>Route <Icon name="next" size={18}/></b><small>14 KM · ALPINE RD</small></span><span className="window-range"><b>82% <i/></b><small>412 KM</small></span><span className="window-connect"><Icon name="signal"/><Icon name="signal" size={16}/><i className="battery"><i/></i></span></div></div>
+    <div className="window-scene"><div className="window-photo"><img src={windowReference} alt="Illustrative outside view with simulated time, weather, route, and connectivity details in a thin lower-edge strip"/></div></div>
   </section>;
 }
 
