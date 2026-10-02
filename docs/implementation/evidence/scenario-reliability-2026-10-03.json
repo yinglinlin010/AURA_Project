@@ -1,0 +1,514 @@
+{
+  "report_version": "aura-scenario-reliability-v1",
+  "created_at": "2026-10-02T22:20:11.621367+00:00",
+  "repository": {
+    "revision": "97fa334faa8a6d9ad5a58a7a7d27ee034e97bfb1",
+    "working_tree_clean": true
+  },
+  "repetitions_per_scenario": 3,
+  "scenario_count": 9,
+  "execution_count": 27,
+  "failed_checks": 0,
+  "checks_passed": true,
+  "evidence_scope": {
+    "claim": "local fresh-process simulator replay reproducibility only",
+    "excludes": [
+      "product reliability",
+      "first-response latency",
+      "barge-in latency",
+      "device behavior",
+      "live provider behavior",
+      "model quality",
+      "physical vehicle behavior"
+    ],
+    "process_elapsed_ms_is_product_latency": false
+  },
+  "runs": [
+    {
+      "scenario_path": "scenarios/cognitive-load-deferral.yaml",
+      "scenario_sha256": "c6371832c37f2eb474f0f0ded9354cb7d8d16057ab285ea8968e0bf6a5124d01",
+      "repetition": 1,
+      "process_elapsed_ms": 93.841,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/cognitive-load-deferral.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "cognitive-load-deferral",
+      "completed_steps": 4,
+      "expectations_passed": 24,
+      "stable_outcome_sha256": "85a0213da3eed0f9665a7d43c10b5b4b42000cb37e6520707f76ad5b8dc59a90"
+    },
+    {
+      "scenario_path": "scenarios/cognitive-load-deferral.yaml",
+      "scenario_sha256": "c6371832c37f2eb474f0f0ded9354cb7d8d16057ab285ea8968e0bf6a5124d01",
+      "repetition": 2,
+      "process_elapsed_ms": 88.9,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/cognitive-load-deferral.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "cognitive-load-deferral",
+      "completed_steps": 4,
+      "expectations_passed": 24,
+      "stable_outcome_sha256": "85a0213da3eed0f9665a7d43c10b5b4b42000cb37e6520707f76ad5b8dc59a90"
+    },
+    {
+      "scenario_path": "scenarios/cognitive-load-deferral.yaml",
+      "scenario_sha256": "c6371832c37f2eb474f0f0ded9354cb7d8d16057ab285ea8968e0bf6a5124d01",
+      "repetition": 3,
+      "process_elapsed_ms": 90.028,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/cognitive-load-deferral.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "cognitive-load-deferral",
+      "completed_steps": 4,
+      "expectations_passed": 24,
+      "stable_outcome_sha256": "85a0213da3eed0f9665a7d43c10b5b4b42000cb37e6520707f76ad5b8dc59a90"
+    },
+    {
+      "scenario_path": "scenarios/competition-v1-story-simulated.yaml",
+      "scenario_sha256": "8671499e0eb87d4c21f103be5b9ca9bdb3b1bc05557a58e2cfef1a305941e48a",
+      "repetition": 1,
+      "process_elapsed_ms": 96.561,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/competition-v1-story-simulated.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "competition-v1-story-simulated",
+      "completed_steps": 18,
+      "expectations_passed": 60,
+      "stable_outcome_sha256": "8ebd92528a7f08996db49da6b5a57e64f857e9bdded01b9ec9b2ac8c872c3277"
+    },
+    {
+      "scenario_path": "scenarios/competition-v1-story-simulated.yaml",
+      "scenario_sha256": "8671499e0eb87d4c21f103be5b9ca9bdb3b1bc05557a58e2cfef1a305941e48a",
+      "repetition": 2,
+      "process_elapsed_ms": 96.824,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/competition-v1-story-simulated.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "competition-v1-story-simulated",
+      "completed_steps": 18,
+      "expectations_passed": 60,
+      "stable_outcome_sha256": "8ebd92528a7f08996db49da6b5a57e64f857e9bdded01b9ec9b2ac8c872c3277"
+    },
+    {
+      "scenario_path": "scenarios/competition-v1-story-simulated.yaml",
+      "scenario_sha256": "8671499e0eb87d4c21f103be5b9ca9bdb3b1bc05557a58e2cfef1a305941e48a",
+      "repetition": 3,
+      "process_elapsed_ms": 95.558,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/competition-v1-story-simulated.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "competition-v1-story-simulated",
+      "completed_steps": 18,
+      "expectations_passed": 60,
+      "stable_outcome_sha256": "8ebd92528a7f08996db49da6b5a57e64f857e9bdded01b9ec9b2ac8c872c3277"
+    },
+    {
+      "scenario_path": "scenarios/connectivity/phase10-offline-cloud-continuity.yaml",
+      "scenario_sha256": "fd4ad9072559610d00dccd72aa2152d5adf9589cd92c6dcdb08b48cf4095a30a",
+      "repetition": 1,
+      "process_elapsed_ms": 92.082,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/connectivity/phase10-offline-cloud-continuity.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "phase10-offline-cloud-continuity",
+      "completed_steps": 9,
+      "expectations_passed": 53,
+      "stable_outcome_sha256": "ff6a4cbd9c1640d382662b0f5b92de223757cc475def42b6752106792178ef6b"
+    },
+    {
+      "scenario_path": "scenarios/connectivity/phase10-offline-cloud-continuity.yaml",
+      "scenario_sha256": "fd4ad9072559610d00dccd72aa2152d5adf9589cd92c6dcdb08b48cf4095a30a",
+      "repetition": 2,
+      "process_elapsed_ms": 92.805,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/connectivity/phase10-offline-cloud-continuity.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "phase10-offline-cloud-continuity",
+      "completed_steps": 9,
+      "expectations_passed": 53,
+      "stable_outcome_sha256": "ff6a4cbd9c1640d382662b0f5b92de223757cc475def42b6752106792178ef6b"
+    },
+    {
+      "scenario_path": "scenarios/connectivity/phase10-offline-cloud-continuity.yaml",
+      "scenario_sha256": "fd4ad9072559610d00dccd72aa2152d5adf9589cd92c6dcdb08b48cf4095a30a",
+      "repetition": 3,
+      "process_elapsed_ms": 91.424,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/connectivity/phase10-offline-cloud-continuity.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "phase10-offline-cloud-continuity",
+      "completed_steps": 9,
+      "expectations_passed": 53,
+      "stable_outcome_sha256": "ff6a4cbd9c1640d382662b0f5b92de223757cc475def42b6752106792178ef6b"
+    },
+    {
+      "scenario_path": "scenarios/connectivity/simulated-stale-refresh.yaml",
+      "scenario_sha256": "46f9a10688cc7ba4e03f38ca24e5b7b6a6e3261746bad08b4fe182033146c80a",
+      "repetition": 1,
+      "process_elapsed_ms": 86.922,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/connectivity/simulated-stale-refresh.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "simulated-stale-refresh",
+      "completed_steps": 2,
+      "expectations_passed": 3,
+      "stable_outcome_sha256": "5be46726d9b571e78a3015726d9cb9d35b06ee01f584cf4dadc068630e57994f"
+    },
+    {
+      "scenario_path": "scenarios/connectivity/simulated-stale-refresh.yaml",
+      "scenario_sha256": "46f9a10688cc7ba4e03f38ca24e5b7b6a6e3261746bad08b4fe182033146c80a",
+      "repetition": 2,
+      "process_elapsed_ms": 87.393,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/connectivity/simulated-stale-refresh.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "simulated-stale-refresh",
+      "completed_steps": 2,
+      "expectations_passed": 3,
+      "stable_outcome_sha256": "5be46726d9b571e78a3015726d9cb9d35b06ee01f584cf4dadc068630e57994f"
+    },
+    {
+      "scenario_path": "scenarios/connectivity/simulated-stale-refresh.yaml",
+      "scenario_sha256": "46f9a10688cc7ba4e03f38ca24e5b7b6a6e3261746bad08b4fe182033146c80a",
+      "repetition": 3,
+      "process_elapsed_ms": 89.036,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/connectivity/simulated-stale-refresh.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "simulated-stale-refresh",
+      "completed_steps": 2,
+      "expectations_passed": 3,
+      "stable_outcome_sha256": "5be46726d9b571e78a3015726d9cb9d35b06ee01f584cf4dadc068630e57994f"
+    },
+    {
+      "scenario_path": "scenarios/journey-recommendation-deferral.yaml",
+      "scenario_sha256": "94e1c2279ba7515167a4a2f015ef2257ad8b5a6a029b74d195b1aabd48683ddf",
+      "repetition": 1,
+      "process_elapsed_ms": 89.772,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/journey-recommendation-deferral.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "journey-recommendation-deferral",
+      "completed_steps": 4,
+      "expectations_passed": 34,
+      "stable_outcome_sha256": "b53fe201b4d28b4ae340a005d4ca9cccc7e8fb84205b16e6e713a8453f765f87"
+    },
+    {
+      "scenario_path": "scenarios/journey-recommendation-deferral.yaml",
+      "scenario_sha256": "94e1c2279ba7515167a4a2f015ef2257ad8b5a6a029b74d195b1aabd48683ddf",
+      "repetition": 2,
+      "process_elapsed_ms": 90.087,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/journey-recommendation-deferral.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "journey-recommendation-deferral",
+      "completed_steps": 4,
+      "expectations_passed": 34,
+      "stable_outcome_sha256": "b53fe201b4d28b4ae340a005d4ca9cccc7e8fb84205b16e6e713a8453f765f87"
+    },
+    {
+      "scenario_path": "scenarios/journey-recommendation-deferral.yaml",
+      "scenario_sha256": "94e1c2279ba7515167a4a2f015ef2257ad8b5a6a029b74d195b1aabd48683ddf",
+      "repetition": 3,
+      "process_elapsed_ms": 91.084,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/journey-recommendation-deferral.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "journey-recommendation-deferral",
+      "completed_steps": 4,
+      "expectations_passed": 34,
+      "stable_outcome_sha256": "b53fe201b4d28b4ae340a005d4ca9cccc7e8fb84205b16e6e713a8453f765f87"
+    },
+    {
+      "scenario_path": "scenarios/perception/m5-parking-assistance-simulated.yaml",
+      "scenario_sha256": "4be7d9726120273895668d21928c9194e36538f7dd4408606f1f55679839a732",
+      "repetition": 1,
+      "process_elapsed_ms": 91.274,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/perception/m5-parking-assistance-simulated.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "m5-parking-assistance-simulated",
+      "completed_steps": 8,
+      "expectations_passed": 44,
+      "stable_outcome_sha256": "3c07557d35759394eca3ec18f4c9527007a0ffa700ffa63ef19de9a0a0aacf5e"
+    },
+    {
+      "scenario_path": "scenarios/perception/m5-parking-assistance-simulated.yaml",
+      "scenario_sha256": "4be7d9726120273895668d21928c9194e36538f7dd4408606f1f55679839a732",
+      "repetition": 2,
+      "process_elapsed_ms": 91.547,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/perception/m5-parking-assistance-simulated.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "m5-parking-assistance-simulated",
+      "completed_steps": 8,
+      "expectations_passed": 44,
+      "stable_outcome_sha256": "3c07557d35759394eca3ec18f4c9527007a0ffa700ffa63ef19de9a0a0aacf5e"
+    },
+    {
+      "scenario_path": "scenarios/perception/m5-parking-assistance-simulated.yaml",
+      "scenario_sha256": "4be7d9726120273895668d21928c9194e36538f7dd4408606f1f55679839a732",
+      "repetition": 3,
+      "process_elapsed_ms": 92.295,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/perception/m5-parking-assistance-simulated.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "m5-parking-assistance-simulated",
+      "completed_steps": 8,
+      "expectations_passed": 44,
+      "stable_outcome_sha256": "3c07557d35759394eca3ec18f4c9527007a0ffa700ffa63ef19de9a0a0aacf5e"
+    },
+    {
+      "scenario_path": "scenarios/safety/critical-warning-persistence.yaml",
+      "scenario_sha256": "53d6cd13d85c8af66d508dc5ab6fa1b996aaa150b45819c9080c95e6b63e0cbc",
+      "repetition": 1,
+      "process_elapsed_ms": 87.709,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/safety/critical-warning-persistence.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "critical-warning-persistence",
+      "completed_steps": 2,
+      "expectations_passed": 11,
+      "stable_outcome_sha256": "dfdfb41a2cbe9b6fc4fc913ba142c3a137733e8ae88414fc406bd9987a5b2e0a"
+    },
+    {
+      "scenario_path": "scenarios/safety/critical-warning-persistence.yaml",
+      "scenario_sha256": "53d6cd13d85c8af66d508dc5ab6fa1b996aaa150b45819c9080c95e6b63e0cbc",
+      "repetition": 2,
+      "process_elapsed_ms": 87.4,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/safety/critical-warning-persistence.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "critical-warning-persistence",
+      "completed_steps": 2,
+      "expectations_passed": 11,
+      "stable_outcome_sha256": "dfdfb41a2cbe9b6fc4fc913ba142c3a137733e8ae88414fc406bd9987a5b2e0a"
+    },
+    {
+      "scenario_path": "scenarios/safety/critical-warning-persistence.yaml",
+      "scenario_sha256": "53d6cd13d85c8af66d508dc5ab6fa1b996aaa150b45819c9080c95e6b63e0cbc",
+      "repetition": 3,
+      "process_elapsed_ms": 90.825,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/safety/critical-warning-persistence.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "critical-warning-persistence",
+      "completed_steps": 2,
+      "expectations_passed": 11,
+      "stable_outcome_sha256": "dfdfb41a2cbe9b6fc4fc913ba142c3a137733e8ae88414fc406bd9987a5b2e0a"
+    },
+    {
+      "scenario_path": "scenarios/safety-override.yaml",
+      "scenario_sha256": "fdf5de5d7adfed87174f02e418551a9f3fd000a663133fa13d9f1d137f0650bf",
+      "repetition": 1,
+      "process_elapsed_ms": 87.651,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/safety-override.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "safety-override",
+      "completed_steps": 2,
+      "expectations_passed": 11,
+      "stable_outcome_sha256": "f0bacff2f8ba5d1b5209b5477fd06d37535bf348aef761133f0eb7c7652adfe6"
+    },
+    {
+      "scenario_path": "scenarios/safety-override.yaml",
+      "scenario_sha256": "fdf5de5d7adfed87174f02e418551a9f3fd000a663133fa13d9f1d137f0650bf",
+      "repetition": 2,
+      "process_elapsed_ms": 90.35,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/safety-override.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "safety-override",
+      "completed_steps": 2,
+      "expectations_passed": 11,
+      "stable_outcome_sha256": "f0bacff2f8ba5d1b5209b5477fd06d37535bf348aef761133f0eb7c7652adfe6"
+    },
+    {
+      "scenario_path": "scenarios/safety-override.yaml",
+      "scenario_sha256": "fdf5de5d7adfed87174f02e418551a9f3fd000a663133fa13d9f1d137f0650bf",
+      "repetition": 3,
+      "process_elapsed_ms": 90.763,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/safety-override.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "safety-override",
+      "completed_steps": 2,
+      "expectations_passed": 11,
+      "stable_outcome_sha256": "f0bacff2f8ba5d1b5209b5477fd06d37535bf348aef761133f0eb7c7652adfe6"
+    },
+    {
+      "scenario_path": "scenarios/voice/m3-mock-voice-consent-barge-in.yaml",
+      "scenario_sha256": "ae4f4fd0d36c2f0ae6ce43803f06a6f167199641df1ac1fbc6195c31a164b338",
+      "repetition": 1,
+      "process_elapsed_ms": 89.301,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/voice/m3-mock-voice-consent-barge-in.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "m3-mock-voice-consent-barge-in",
+      "completed_steps": 5,
+      "expectations_passed": 17,
+      "stable_outcome_sha256": "a04a4b632100bfd61c6676076abf6866345d96196b55f49eaa8328fca293da0c"
+    },
+    {
+      "scenario_path": "scenarios/voice/m3-mock-voice-consent-barge-in.yaml",
+      "scenario_sha256": "ae4f4fd0d36c2f0ae6ce43803f06a6f167199641df1ac1fbc6195c31a164b338",
+      "repetition": 2,
+      "process_elapsed_ms": 89.335,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/voice/m3-mock-voice-consent-barge-in.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "m3-mock-voice-consent-barge-in",
+      "completed_steps": 5,
+      "expectations_passed": 17,
+      "stable_outcome_sha256": "a04a4b632100bfd61c6676076abf6866345d96196b55f49eaa8328fca293da0c"
+    },
+    {
+      "scenario_path": "scenarios/voice/m3-mock-voice-consent-barge-in.yaml",
+      "scenario_sha256": "ae4f4fd0d36c2f0ae6ce43803f06a6f167199641df1ac1fbc6195c31a164b338",
+      "repetition": 3,
+      "process_elapsed_ms": 92.958,
+      "command": [
+        "node",
+        "dist/adapters/simulator/src/cli.js",
+        "scenarios/voice/m3-mock-voice-consent-barge-in.yaml",
+        "--fast"
+      ],
+      "data_mode": "simulated; mock voice where declared",
+      "passed": true,
+      "scenario_id": "m3-mock-voice-consent-barge-in",
+      "completed_steps": 5,
+      "expectations_passed": 17,
+      "stable_outcome_sha256": "a04a4b632100bfd61c6676076abf6866345d96196b55f49eaa8328fca293da0c"
+    }
+  ]
+}
