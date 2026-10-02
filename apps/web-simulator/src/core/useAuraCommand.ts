@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ConnectivityMode, SignalSource } from '../../../../contracts/protocol/src/types';
+import { CANONICAL_PRESENCE_STATES, type ConnectivityMode, type PresenceSnapshot, type SignalSource } from '../../../../contracts/protocol/src/types';
 
 const PROTOCOL_VERSION = 1 as const;
 const GATEWAY_URL = import.meta.env.VITE_AURA_WS_URL ?? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname || 'localhost'}:${import.meta.env.VITE_AURA_WS_PORT ?? '8080'}/ws`;
@@ -72,6 +72,7 @@ export interface GatewayState {
   proposals: SharedProposal[];
   journeyStops: SharedStop[];
   activeSafetyWarning: SharedSafetyWarning | null;
+  presence: PresenceSnapshot | null;
   connections: Record<DisplayId, DisplayConnection>;
 }
 
@@ -85,6 +86,7 @@ const initialState: GatewayState = {
   proposals: [],
   journeyStops: [],
   activeSafetyWarning: null,
+  presence: null,
   connections: initialConnections,
 };
 const emptySearch = (): DiscoverySearchState => ({ status: 'idle', requestId: null, results: [], observedAt: null, errorCode: null });
@@ -94,6 +96,15 @@ const emptyRecommendation = (): JourneyRecommendationState => ({ status: 'idle',
 const updateProposal = (proposals: SharedProposal[], next: SharedProposal) => {
   const index = proposals.findIndex((proposal) => proposal.proposalId === next.proposalId);
   return index < 0 ? [...proposals, next] : proposals.map((proposal, i) => i === index ? { ...proposal, ...next } : proposal);
+};
+const isPresenceSnapshot = (value: unknown): value is PresenceSnapshot => {
+  if (!value || typeof value !== 'object') return false;
+  const presence = value as Partial<PresenceSnapshot>;
+  return typeof presence.state === 'string' && CANONICAL_PRESENCE_STATES.includes(presence.state as PresenceSnapshot['state']) && Number.isSafeInteger(presence.revision) && (presence.revision as number) >= 0;
+};
+const latestPresence = (current: PresenceSnapshot | null, candidate: unknown): PresenceSnapshot | null => {
+  if (!isPresenceSnapshot(candidate) || (current && candidate.revision <= current.revision)) return current;
+  return candidate;
 };
 
 export function useAuraCommand() {
@@ -210,11 +221,13 @@ export function useAuraCommand() {
               setConnection({ sessionId: null, status: 'error', lastMessage: 'Gateway welcome did not match this display registration' });
             } else {
               setConnection({ sessionId: data.sessionId, status: 'connected', lastMessage: `Registered as ${data.displayId} / ${data.role}` });
+              if (isPresenceSnapshot(data.presence)) setState((current) => ({ ...current, presence: latestPresence(current.presence, data.presence) }));
             }
           } else if (data.kind === 'snapshot') {
             const shared = data.snapshot?.state;
             if (shared) setState((current) => ({
               ...current,
+              presence: latestPresence(current.presence, data.snapshot?.presence),
               speedKph: shared.vehicle?.speedKph ?? current.speedKph,
               load: shared.driver?.currentLoad ?? current.load,
               connectivity: shared.connectivity ? { mode: shared.connectivity.mode, source: shared.connectivity.source } : current.connectivity,
@@ -223,6 +236,8 @@ export function useAuraCommand() {
               activeSafetyWarning: shared.activeSafetyWarning ?? null,
               connections: { ...current.connections, [registration.displayId]: { ...current.connections[registration.displayId], lastMessage: 'Shared state snapshot received' } },
             }));
+          } else if (data.kind === 'presence.state.changed') {
+            setState((current) => ({ ...current, presence: latestPresence(current.presence, data.presence) }));
           } else if (data.kind === 'event') {
             const event = data.event;
             if (event?.type === 'vehicle.state.updated') setState((current) => ({ ...current, speedKph: event.payload?.vehicle?.speedKph ?? current.speedKph }));

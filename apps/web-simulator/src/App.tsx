@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import passengerReference from '../../../AURA_UI_UX_Handoff/images/03_passenger_display_final.jpg';
 import windowReference from '../../../AURA_UI_UX_Handoff/images/05_interactive_window_final.jpg';
 import { resolveBrand } from '../../../packages/core-domain/src/brand';
+import type { PresenceSnapshot } from '../../../contracts/protocol/src/types';
 import { DISPLAY_REGISTRATIONS, useAuraCommand, type DiscoveryState, type GatewayState, type JourneyRecommendationState, type RecommendationProposal, type SharedProposal, type SharedSafetyWarning, type SharedStop, type TransientPlace } from './core/useAuraCommand';
 import './App.css';
 
@@ -37,6 +38,18 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
 
 function StatusBar({ time = '16:03' }: { time?: string }) {
   return <div className="device-status" aria-label="Simulated status bar: time and temperature are examples; connectivity icons are illustrative"><span>{time}</span><span>21°C</span><span className="status-source">SIMULATED</span><span className="status-spacer" /><span>5G</span><Icon name="signal" size={15} /><span className="battery"><i /></span></div>;
+}
+
+function PresenceBadge({ presence }: { presence: PresenceSnapshot | null }) {
+  const state = presence?.state ?? null;
+  const label = state === 'OFFLINE' ? 'OFFLINE · LOCAL' : state;
+  return <span className={`aura-presence-badge ${state ? state.toLowerCase() : 'pending'}`} aria-label={state ? `AURA presence ${state}` : 'AURA presence state pending'} title={state ? `Canonical AURA presence · revision ${presence?.revision}` : 'Waiting for canonical AURA presence from Core Host'}>
+    <i aria-hidden="true" />AURA · {label ?? 'STATE PENDING'}
+  </span>;
+}
+
+function ScreenHeading({ title, details, gatewayStatus, presence, windowExamples = false }: { title: string; details: string; gatewayStatus: string; presence: PresenceSnapshot | null; windowExamples?: boolean }) {
+  return <div className="screen-heading"><h1>{title}</h1><span className="screen-heading-meta"><span>{details} · Gateway {gatewayStatus}</span><PresenceBadge presence={presence}/>{windowExamples && <small className="window-example-label">SIMULATED EXAMPLES</small>}</span></div>;
 }
 
 function Cluster({ speedKph, warning }: { speedKph: number; warning: SharedSafetyWarning | null }) {
@@ -326,23 +339,18 @@ function App() {
   const windowConnection = gateway.connections['window-tablet'];
   const passengerProposal = [...gateway.proposals].reverse().find((item) => (item.kind === 'ADD_TRIP_STOP' || item.payload?.discoveryMode === 'route_preview') && item.targetRole === 'center');
   const voiceActive = voice.status !== 'IDLE' && voice.status !== 'ERROR';
-  const voiceLabel = voice.status === 'REQUESTING_PERMISSION' ? 'Requesting microphone permission'
-    : voice.status === 'CONNECTING' ? 'Connecting voice provider'
-      : voice.status === 'STOPPING' ? 'Stopping voice'
-        : voice.status;
   const setConnectivity = (mode: 'online' | 'degraded' | 'offline') => sendCommand('center-main', { type: 'connectivity.mode.report', payload: { mode, evidence: 'CONTROL_CONSOLE_SIMULATION' } });
 
   return <main className="simulator-shell">
-    <header className="simulator-header"><div className="brand-lockup"><span className="aura-mark">{BRAND.productName.slice(0, 1).toUpperCase()}</span><div><strong>{BRAND.productName}</strong><span>Multi-display simulator</span></div></div><div className="session-status"><span className="simulation-tag">Illustrative simulation</span><span className={`presence-indicator ${voice.status === 'LISTENING' ? 'listening' : ''}`}/><span>{BRAND.assistantName}&nbsp; {voiceLabel}</span><button className="listen-button" onClick={() => { if (voiceActive) stopVoice(); else void startVoice(); }} aria-pressed={voiceActive}><Icon name="mic" size={16}/>{voiceActive ? 'Stop listening' : voice.status === 'ERROR' ? 'Try voice again' : 'Listen'}</button></div></header>
-    {(voice.error || voice.inputTranscript || voice.outputTranscript || voice.status !== 'IDLE') && <div className={`voice-feedback ${voice.error ? 'voice-error' : ''}`} aria-live="polite">
+    <header className="simulator-header"><div className="brand-lockup"><span className="aura-mark">{BRAND.productName.slice(0, 1).toUpperCase()}</span><div><strong>{BRAND.productName}</strong><span>Multi-display simulator</span></div></div><div className="session-status"><span className="simulation-tag">Illustrative simulation</span><PresenceBadge presence={gateway.presence}/><button className="listen-button" onClick={() => { if (voiceActive) stopVoice(); else void startVoice(); }} aria-pressed={voiceActive}><Icon name="mic" size={16}/>{voiceActive ? 'Stop listening' : voice.status === 'ERROR' ? 'Try voice again' : 'Listen'}</button></div></header>
+    {(voice.error || voice.inputTranscript || voice.outputTranscript) && <div className={`voice-feedback ${voice.error ? 'voice-error' : ''}`} aria-live="polite">
       {voice.error && <span>{voice.error}</span>}
-      {!voice.error && voice.status !== 'IDLE' && <span>Voice: {voiceLabel}</span>}
       {voice.inputTranscript && <span><b>You:</b> {voice.inputTranscript}</span>}
       {voice.outputTranscript && <span><b>{BRAND.assistantName}:</b> {voice.outputTranscript}</span>}
     </div>}
     <div className="vehicle-layout">
-      <div className="driver-zone"><div className="screen-heading"><h1>Driver display</h1><span>8:3 instrument cluster · Gateway {clusterConnection.status}</span></div><Cluster speedKph={gateway.speedKph} warning={gateway.activeSafetyWarning}/><div className="screen-heading center-heading"><h1>Journey &amp; control</h1><span>16:9 center display · Gateway {centerConnection.status}</span></div><CenterDisplay proposals={gateway.proposals} journeyStops={gateway.journeyStops} connection={centerConnection} load={gateway.load} warning={gateway.activeSafetyWarning} recommendation={recommendation} onRecommendationRequest={requestJourneyRecommendation} onRecommendationSubmit={(proposal) => { submitJourneyRecommendation(proposal); }} onConsent={(proposalId, decision) => sendCommand('center-main', { type: 'action.consent', payload: { proposalId, decision } })}/></div>
-      <div className="passenger-zone"><div className="screen-heading"><h1>Passenger discovery</h1><span>16:9 front passenger · Gateway {passengerConnection.status}</span></div><PassengerDisplay discovery={discovery} searchPlaces={searchPlaces} previewRoute={previewRoute} proposal={passengerProposal} connection={passengerConnection} onProposal={(place, route, originLabel) => {
+      <div className="driver-zone"><ScreenHeading title="Driver display" details="Cluster" gatewayStatus={clusterConnection.status} presence={gateway.presence}/><Cluster speedKph={gateway.speedKph} warning={gateway.activeSafetyWarning}/><ScreenHeading title="Journey & control" details="Center" gatewayStatus={centerConnection.status} presence={gateway.presence}/><CenterDisplay proposals={gateway.proposals} journeyStops={gateway.journeyStops} connection={centerConnection} load={gateway.load} warning={gateway.activeSafetyWarning} recommendation={recommendation} onRecommendationRequest={requestJourneyRecommendation} onRecommendationSubmit={(proposal) => { submitJourneyRecommendation(proposal); }} onConsent={(proposalId, decision) => sendCommand('center-main', { type: 'action.consent', payload: { proposalId, decision } })}/></div>
+      <div className="passenger-zone"><ScreenHeading title="Passenger discovery" details="Front passenger" gatewayStatus={passengerConnection.status} presence={gateway.presence}/><PassengerDisplay discovery={discovery} searchPlaces={searchPlaces} previewRoute={previewRoute} proposal={passengerProposal} connection={passengerConnection} onProposal={(place, route, originLabel) => {
         const pathSummary = `${(route.distanceMeters / 1000).toFixed(1)} km · ${(route.durationSeconds / 60).toFixed(0)} min`;
         const payload = discovery.route;
         if (payload.status !== 'available' || payload.freshness !== 'fresh' || payload.source !== 'api' || !payload.provider || typeof payload.observedAt !== 'number' || !payload.attribution || !payload.attributionUrl) return;
@@ -360,8 +368,8 @@ function App() {
           },
         } } });
       }}/></div>
-      <div className="rear-zone"><div className="screen-heading"><h1>Rear cabin</h1><span>4:3 rear display · Gateway {rearConnection.status}</span></div><RearDisplay/></div>
-      <div className="window-zone"><div className="screen-heading"><h1>Ambient window</h1><span>4:3 interactive window · Gateway {windowConnection.status}</span></div><WindowDisplay/></div>
+      <div className="rear-zone"><ScreenHeading title="Rear cabin" details="Rear display" gatewayStatus={rearConnection.status} presence={gateway.presence}/><RearDisplay/></div>
+      <div className="window-zone"><ScreenHeading title="Ambient window" details="Window" gatewayStatus={windowConnection.status} presence={gateway.presence} windowExamples/><WindowDisplay/></div>
     </div>
     <ControlConsole speedKph={gateway.speedKph} load={gateway.load} connectivity={gateway.connectivity} connections={gateway.connections} status={centerConnection.status} lastMessage={centerConnection.lastMessage} onSpeed={(speed) => sendCommand('center-main', { type: 'vehicle.telemetry.report', payload: { vehicle: { speedKph: speed } } })} onLoad={(level) => sendCommand('center-main', { type: 'driver.cognitive_load.report', payload: { level, timestamp: Date.now(), confidence: 1 } })} onConnectivity={setConnectivity}/>
     <footer className="simulator-footer"><span>Scenario&nbsp; <b>Munich → Stuttgart</b></span><span>Illustrative route values · shared vehicle telemetry updates when the gateway is connected</span></footer>

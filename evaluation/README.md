@@ -21,3 +21,26 @@ The run contract requires intent accuracy, tool selection, structured output val
 The existing `ml/aura_distill/train/evaluate.py` remains a narrow offline cabin-setting experiment. Its reports cover schema validity, exact intent/payload match, abstention, a prohibited-output gate, latency, and memory. It does not populate these suites or measure tool selection, response length, task completion, or real vehicle/peripheral benchmarks.
 
 No dataset rows, model inference, training, or benchmark results are included by this scaffold. A future human review must decide both content and rights status; internal-use clearance and model-license declarations do not imply redistribution permission.
+
+## Local scenario replay evidence
+
+The Competition V1 simulator fixtures can be replayed in fresh processes to
+check that their schemas and declared expectations remain reproducible:
+
+```sh
+npm run scenario:reliability -- --repetitions 3
+```
+
+The runner discovers YAML files under `scenarios/`, records each scenario hash,
+repository revision, pass/fail result, expectation count, and an outcome
+fingerprint that omits timestamps and generated runtime state. It exits
+non-zero if a scenario or any declared expectation fails, or if stable outcomes
+differ between repetitions. Use `--scenario scenarios/path.yaml` to select
+fixtures and `--report /path/to/report.json` to save a machine-readable report.
+Each execution starts a new Node process and a new simulator runtime.
+
+This is a regression/reproducibility check over simulated and mock paths. Its
+`process_elapsed_ms` value measures local process execution only; it is not a
+product reliability percentage, first-response latency, barge-in latency,
+provider/model quality, device behavior, or physical vehicle evidence. It does
+not populate or approve the held-out evaluation suites above.

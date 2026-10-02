@@ -13,6 +13,22 @@ export type DisplayRole = StandardDisplayRole | (string & {});
 
 export type SignalSource = "sensor" | "simulated" | "api" | "derived" | "cache";
 export type SignalFreshness = "fresh" | "cached" | "stale" | "unknown";
+export const CANONICAL_PRESENCE_STATES = [
+  "IDLE",
+  "LISTENING",
+  "THINKING",
+  "SPEAKING",
+  "EXECUTING",
+  "OFFLINE",
+  "WARNING",
+] as const;
+export type CanonicalPresenceState = (typeof CANONICAL_PRESENCE_STATES)[number];
+
+export interface PresenceSnapshot {
+  state: CanonicalPresenceState;
+  revision: number;
+}
+
 export type ConnectivityMode = "online" | "degraded" | "offline";
 export type Gear = "P" | "R" | "N" | "D" | "UNKNOWN";
 export type CognitiveLoadLevel = "low" | "normal" | "high" | "critical";
@@ -175,6 +191,7 @@ export interface StateSnapshot {
   generatedAt: number;
   displayId?: string;
   state: AuraSharedState;
+  presence: PresenceSnapshot;
 }
 
 export type AuraCommand =
@@ -517,6 +534,13 @@ export interface SnapshotMessage {
   snapshot: StateSnapshot;
 }
 
+/** Shared canonical presence transition delivered to every registered HMI. */
+export interface PresenceStateChangedMessage {
+  kind: "presence.state.changed";
+  protocolVersion: typeof PROTOCOL_VERSION;
+  presence: PresenceSnapshot;
+}
+
 export interface EventMessage {
   kind: "event";
   event: AuraDomainEvent;
@@ -565,6 +589,7 @@ export type ServerMessage =
   | WelcomeMessage
   | AckMessage
   | SnapshotMessage
+  | PresenceStateChangedMessage
   | EventMessage
   | ErrorMessage
   | PongMessage

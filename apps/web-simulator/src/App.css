@@ -10,6 +10,10 @@
 .simulation-tag { color: #d0b89e; padding: 5px 9px; border: 1px solid rgba(229,218,204,.28); text-transform: uppercase; letter-spacing: .1em; font-size: 9px; }
 .presence-indicator { width: 7px; height: 7px; border-radius: 50%; background: #8c8c90; }
 .presence-indicator.listening { background: var(--orange); }
+.aura-presence-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px; color: #c9c9cb; background: #272729; border: 1px solid #56565a; font-size: 8px; font-weight: 700; letter-spacing: .045em; line-height: 1; text-transform: uppercase; white-space: nowrap; }
+.aura-presence-badge > i { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: #8c8c90; }
+.aura-presence-badge.listening > i { background: var(--orange); }.aura-presence-badge.thinking > i { background: #e8bb65; }.aura-presence-badge.speaking > i { background: #80c5d7; }.aura-presence-badge.executing > i { background: #81c98c; }.aura-presence-badge.offline > i { background: #a8a8ad; }.aura-presence-badge.warning { color: #ffd5d1; background: #3b1b1a; border-color: var(--red); }.aura-presence-badge.warning > i { background: var(--red); }.aura-presence-badge.pending > i { background: #77777c; }
+.window-example-label { padding: 3px 5px; color: #f0c59d; border: 1px solid #765338; font-size: 7px; font-weight: 700; letter-spacing: .05em; white-space: nowrap; }
 .listen-button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 11px; color: var(--bone); background: #28282a; border: 1px solid var(--line); cursor: pointer; }
 .listen-button:hover { border-color: rgba(229,218,204,.55); }
 .voice-feedback { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 8px 0 0; padding: 8px 12px; color: var(--bone); background: #222224; border: 1px solid var(--line); font-size: 12px; }
@@ -17,9 +21,11 @@
 .voice-feedback b { color: #ff8a55; }
 .vehicle-layout { display: grid; grid-template-columns: minmax(0, 1.63fr) minmax(440px, .9fr); gap: 35px 40px; padding-top: 26px; align-items: start; }
 .driver-zone, .passenger-zone, .rear-zone, .window-zone { min-width: 0; }
-.screen-heading { min-height: 27px; justify-content: space-between; margin-bottom: 11px; }
+.screen-heading { min-height: 27px; justify-content: space-between; margin-bottom: 11px; gap: 8px; }
 .screen-heading h1 { margin: 0; color: #dfdfdf; font-family: 'Segoe UI', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: .02em; }
 .screen-heading > span { color: #8f8f93; font-size: 10px; }
+.screen-heading-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px 6px; }
+.screen-heading-meta > span:first-child { color: #8f8f93; font-size: 9px; white-space: nowrap; }
 .device { position: relative; min-width: 0; overflow: hidden; color: var(--bone); background: var(--matte); border: 1px solid #4b4b4e; box-shadow: 0 12px 30px rgba(0,0,0,.2); }
 
 /* Cluster: essential vehicle facts, centered speed and restrained instrument marks. */

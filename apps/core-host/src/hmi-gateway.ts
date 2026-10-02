@@ -17,6 +17,8 @@ import type {
   JourneyRoutePreviewMessage,
   PlacesSearchMessage,
   ServerMessage,
+  CanonicalPresenceState,
+  PresenceSnapshot,
 } from "../../../contracts/protocol/src/types.js";
 import { CoreRuntime } from "../../../packages/core-runtime/src/index.js";
 import type { VoiceRuntime } from "../../../packages/core-runtime/src/voice-runtime.js";
@@ -60,6 +62,7 @@ export class HmiGateway {
   private readonly routing: MapboxDirectionsAdapter | undefined;
   private readonly journeyRecommendations: JourneyRecommendationEvidenceSource | undefined;
   private voiceOwner: ClientSession | undefined;
+  private presence: PresenceSnapshot = { state: "IDLE", revision: 0 };
   private readonly server: WebSocketServer;
   private readonly unsubscribe: () => void;
   private readonly unsubscribeVoice: (() => void) | undefined;
@@ -99,12 +102,14 @@ export class HmiGateway {
     });
     this.server.on("connection", (socket) => this.accept(socket));
     this.unsubscribe = this.runtime.eventBus.subscribe((event) => {
+      this.refreshPresence();
       const message: ServerMessage = { kind: "event", event };
       for (const client of this.clients) {
         if (client.registration) this.send(client.socket, message);
       }
     });
     this.unsubscribeVoice = this.voice?.subscribe((event) => {
+      if (event.type === "state") this.refreshPresence();
       const owner = this.voiceOwner;
       if (!owner?.registration) return;
       if (event.type === "state") {
@@ -388,6 +393,7 @@ export class HmiGateway {
 
     this.runtime.setDisplayConnection(message.displayId, true, message.traceId);
     client.registration = registration;
+    this.refreshPresence();
     this.send(client.socket, {
       kind: "welcome",
       protocolVersion: PROTOCOL_VERSION,
@@ -398,7 +404,7 @@ export class HmiGateway {
     });
     this.send(client.socket, {
       kind: "snapshot",
-      snapshot: this.runtime.createSnapshot(registration.displayId),
+      snapshot: this.runtime.createSnapshot(registration.displayId, this.presence),
     });
   }
 
@@ -456,8 +462,36 @@ export class HmiGateway {
     }
     this.send(client.socket, {
       kind: "snapshot",
-      snapshot: this.runtime.createSnapshot(client.registration.displayId),
+      snapshot: this.runtime.createSnapshot(client.registration.displayId, this.presence),
     });
+  }
+
+  private refreshPresence(): void {
+    const state = this.projectPresence();
+    if (state === this.presence.state) return;
+    this.presence = { state, revision: this.presence.revision + 1 };
+    const message: ServerMessage = {
+      kind: "presence.state.changed",
+      protocolVersion: PROTOCOL_VERSION,
+      presence: this.presence,
+    };
+    for (const client of this.clients) {
+      if (client.registration) this.send(client.socket, message);
+    }
+  }
+
+  private projectPresence(): CanonicalPresenceState {
+    const state = this.runtime.getState();
+    if (state.activeSafetyWarning !== null) return "WARNING";
+    if (state.connectivity.mode === "offline") return "OFFLINE";
+    if (state.activeTasks.some((task) => task.status === "running")) return "EXECUTING";
+    switch (this.voice?.currentState ?? "IDLE") {
+      case "LISTENING": return "LISTENING";
+      case "TRANSCRIBING":
+      case "THINKING": return "THINKING";
+      case "SPEAKING": return "SPEAKING";
+      case "IDLE": return "IDLE";
+    }
   }
 
   private handleClose(client: ClientSession): void {

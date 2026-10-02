@@ -6,7 +6,7 @@
     "content": "pending_human_review",
     "rights": "pending_human_review"
   },
-  "tool_schema_version": "protocol-v1@sha256:b7c990cf4f6f48e3746a2543993fa3c3134db5f437086249d4f2e7a037ebdf1b",
+  "tool_schema_version": "protocol-v1@sha256:91f28449193c534f6286179fa4fa4437ba3cd398cffe03b4e92cf2e063f424a5",
   "suites": [
     {"suite_id":"intent_zh_tw","path":"intent/zh-TW_commands.jsonl","case_count":0,"sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
     {"suite_id":"parking_assistance","path":"parking/assistance_cases.jsonl","case_count":0,"sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},

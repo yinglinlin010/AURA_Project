@@ -25,6 +25,7 @@ import type {
   DisplayRegistry,
   DisplayRole,
   PolicyDecision,
+  PresenceSnapshot,
   ProposalStatus,
   VehicleState,
 } from "../../../contracts/protocol/src/types.js";
@@ -124,7 +125,7 @@ export class CoreRuntime {
     });
   }
 
-  createSnapshot(displayId?: string) {
+  createSnapshot(displayId?: string, presence: PresenceSnapshot = { state: "IDLE", revision: 0 }) {
     return {
       protocolVersion: PROTOCOL_VERSION,
       sessionId: this.sessionId,
@@ -133,6 +134,7 @@ export class CoreRuntime {
       generatedAt: this.now(),
       ...(displayId === undefined ? {} : { displayId }),
       state: this.getState(),
+      presence,
     } as const;
   }
 

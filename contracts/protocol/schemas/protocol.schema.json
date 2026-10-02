@@ -945,6 +945,15 @@
       },
       "additionalProperties": false
     },
+    "presenceSnapshot": {
+      "type": "object",
+      "required": ["state", "revision"],
+      "properties": {
+        "state": {"type": "string", "enum": ["IDLE", "LISTENING", "THINKING", "SPEAKING", "EXECUTING", "OFFLINE", "WARNING"]},
+        "revision": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
     "stateSnapshot": {
       "type": "object",
       "required": [
@@ -953,7 +962,8 @@
         "stateRevision",
         "sequence",
         "generatedAt",
-        "state"
+        "state",
+        "presence"
       ],
       "properties": {
         "protocolVersion": {
@@ -979,7 +989,8 @@
         },
         "state": {
           "$ref": "#/definitions/sharedState"
-        }
+        },
+        "presence": {"$ref": "#/definitions/presenceSnapshot"}
       },
       "additionalProperties": false
     },
@@ -2204,6 +2215,16 @@
       ],
       "additionalProperties": false
     },
+    "presenceStateChangedMessage": {
+      "type": "object",
+      "required": ["kind", "protocolVersion", "presence"],
+      "properties": {
+        "kind": {"const": "presence.state.changed"},
+        "protocolVersion": {"$ref": "#/definitions/protocolVersion"},
+        "presence": {"$ref": "#/definitions/presenceSnapshot"}
+      },
+      "additionalProperties": false
+    },
     "serverMessage": {
       "oneOf": [
         {
@@ -2214,6 +2235,9 @@
         },
         {
           "$ref": "#/definitions/snapshotMessage"
+        },
+        {
+          "$ref": "#/definitions/presenceStateChangedMessage"
         },
         {
           "$ref": "#/definitions/eventMessage"

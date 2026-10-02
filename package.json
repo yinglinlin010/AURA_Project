@@ -7,10 +7,11 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.test.json && node --test dist-test/packages/core-runtime/test/*.test.js dist-test/apps/core-host/test/*.test.js dist-test/adapters/simulator/test/*.test.js",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/packages/core-runtime/test/*.test.js dist-test/apps/core-host/test/*.test.js dist-test/adapters/simulator/test/*.test.js && python3 -m unittest discover -s scripts -p 'test_*.py' && python3 evaluation/validate_registry.py",
     "start": "npm run build && npm run start:core",
     "start:core": "node dist/apps/core-host/src/main.js",
     "scenario": "node dist/adapters/simulator/src/cli.js",
+    "scenario:reliability": "npm run build && python3 scripts/scenario_reliability.py",
     "demo:router": "node dist/scripts/demo-intelligence-router.js",
     "test:event-bus": "tsc -p tsconfig.test.json && node --test dist-test/packages/core-runtime/test/event-bus.test.js"
   },
