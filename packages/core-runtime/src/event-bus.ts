@@ -35,6 +35,13 @@ export class EventBus {
     return this.nextSequence;
   }
 
+  /** Whether the bounded history still contains every event after a sequence. */
+  canReplayAfter(sequence: number): boolean {
+    if (!Number.isSafeInteger(sequence) || sequence < 0 || sequence > this.nextSequence) return false;
+    const oldestSequence = this.history[0]?.sequence ?? this.nextSequence + 1;
+    return sequence >= oldestSequence - 1;
+  }
+
   subscribe(listener: EventListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);

@@ -183,7 +183,7 @@ interface WireEnvelope<T> {
 
 1. Core Runtime 在同一 session 內單調增加 event sequence。
 2. Command `messageId` 冪等；重送回傳原 receipt，不得重複執行 effect。
-3. Client 登錄時收到 snapshot 與當前 sequence。重連或發現缺號時，先重新取得 snapshot，再套用後續事件。
+3. Client 登錄時收到 snapshot 與當前 sequence。已註冊 client 發現缺號時，帶上 `afterSequence` 請求 resync；若 bounded event history 完整涵蓋缺口，Gateway 依序重播遺漏事件，若 history 已淘汰或序號不在目前 session 範圍，就回傳完整 snapshot，再套用後續事件。
 4. WebSocket 順序只保證單一連線；跨重連以 sequence number 為準。
 5. `ack` 表示收到並分類 command，不代表已同意或執行。
 6. 未知協定版本、command type、role、無效欄位或過期 consent token 都回傳 typed error。

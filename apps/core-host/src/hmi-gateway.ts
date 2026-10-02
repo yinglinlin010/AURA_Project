@@ -447,6 +447,13 @@ export class HmiGateway {
       this.sendError(client.socket, "SESSION_MISMATCH", "Reconnect to the current runtime session.", message.traceId);
       return;
     }
+    if (message.afterSequence !== undefined && this.runtime.eventBus.canReplayAfter(message.afterSequence)) {
+      const missed = this.runtime.eventBus.eventsAfter(message.afterSequence);
+      if (missed.length > 0) {
+        for (const event of missed) this.send(client.socket, { kind: "event", event });
+        return;
+      }
+    }
     this.send(client.socket, {
       kind: "snapshot",
       snapshot: this.runtime.createSnapshot(client.registration.displayId),

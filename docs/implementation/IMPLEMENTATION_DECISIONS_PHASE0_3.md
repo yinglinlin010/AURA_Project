@@ -3,7 +3,7 @@
 ## Implemented scope
 
 - Phase 0: versioned TypeScript protocol contracts, JSON Schema validation boundary, and a data-driven Display Registry.
-- Phase 1: immutable event envelopes, an in-process idempotent event bus, shared-state reducer, WebSocket registration/command/snapshot/resync gateway, and command receipts.
+- Phase 1: immutable event envelopes, an in-process idempotent event bus, shared-state reducer, WebSocket registration/command/snapshot/resync gateway, and command receipts. Resync replays a complete retained event interval when available and falls back to a snapshot when the cursor is outside retained history.
 - Phase 2: headless YAML scenario loading and timeline replay through `CoreRuntime.ingestSignal()` and `CoreRuntime.submitCommand()`.
 - Phase 3 assignment: deterministic Safety Supervisor, cognitive-load Action Gate, role-scoped Consent Manager, and abortable secondary task tracking.
 
