@@ -25,6 +25,11 @@ export function evaluateConsent(
   if (proposal.status !== "awaiting_consent") {
     return { accepted: false, reasonCode: "PROPOSAL_NOT_AWAITING_CONSENT" };
   }
+  const isSharedJourneyMutation = proposal.kind === "ADD_TRIP_STOP" ||
+    proposal.payload.discoveryMode === "route_preview";
+  if (isSharedJourneyMutation && (responderRole !== "center" || proposal.targetRole !== "center")) {
+    return { accepted: false, reasonCode: "JOURNEY_CONSENT_REQUIRES_CENTER" };
+  }
   if (proposal.targetRole !== responderRole) {
     return { accepted: false, reasonCode: "CONSENT_ROLE_MISMATCH" };
   }

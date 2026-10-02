@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CANONICAL_PRESENCE_STATES, type ConnectivityMode, type PresenceSnapshot, type SignalSource } from '../../../../contracts/protocol/src/types';
+import { acceptGatewayEvent, acceptGatewaySnapshot, createGatewayOrderCursor, establishGatewaySession, type GatewayDomainEvent } from './gateway-order';
+import { reconnectDelayMs } from './reconnect-policy';
 
 const PROTOCOL_VERSION = 1 as const;
 const GATEWAY_URL = import.meta.env.VITE_AURA_WS_URL ?? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname || 'localhost'}:${import.meta.env.VITE_AURA_WS_PORT ?? '8080'}/ws`;
@@ -109,6 +111,7 @@ const latestPresence = (current: PresenceSnapshot | null, candidate: unknown): P
 
 export function useAuraCommand() {
   const socketsRef = useRef<Partial<Record<DisplayId, WebSocket>>>({});
+  const gatewayOrderRef = useRef(createGatewayOrderCursor());
   const stateRef = useRef<GatewayState>(initialState);
   const voiceResourcesRef = useRef<VoiceResources | null>(null);
   const pendingAudioContextRef = useRef<AudioContext | null>(null);
@@ -188,21 +191,84 @@ export function useAuraCommand() {
 
   useEffect(() => {
     const sockets: WebSocket[] = [];
-    for (const registration of DISPLAY_REGISTRATIONS) {
+    const retryTimers = new Map<DisplayId, ReturnType<typeof setTimeout>>();
+    const failedAttempts = new Map<DisplayId, number>();
+    const seenSessions = new Set<string>();
+    const reconnecting = new Set<DisplayId>();
+    let resyncRequested = false;
+    let mounted = true;
+    // Retries are isolated per display socket; a successful open restarts that socket's backoff.
+    const scheduleReconnect = (registration: (typeof DISPLAY_REGISTRATIONS)[number]) => {
+      if (!mounted || retryTimers.has(registration.displayId)) return;
+      const attempt = failedAttempts.get(registration.displayId) ?? 0;
+      failedAttempts.set(registration.displayId, attempt + 1);
+      const timer = setTimeout(() => {
+        retryTimers.delete(registration.displayId);
+        if (mounted) connect(registration);
+      }, reconnectDelayMs(attempt));
+      retryTimers.set(registration.displayId, timer);
+    };
+    const connect = (registration: (typeof DISPLAY_REGISTRATIONS)[number]) => {
+      if (!mounted) return;
       try {
         const socket = new WebSocket(GATEWAY_URL);
+        let socketSessionId: string | null = null;
+        let reconnected = false;
         if (registration.displayId === 'center-main') socket.binaryType = 'arraybuffer';
         sockets.push(socket);
         socketsRef.current[registration.displayId] = socket;
-        const setConnection = (changes: Partial<DisplayConnection>) => setState((current) => ({
-          ...current,
-          connections: { ...current.connections, [registration.displayId]: { ...current.connections[registration.displayId], ...changes } },
-        }));
+        const setConnection = (changes: Partial<DisplayConnection>) => {
+          if (!mounted || socketsRef.current[registration.displayId] !== socket) return;
+          setState((current) => ({ ...current,
+            connections: { ...current.connections, [registration.displayId]: { ...current.connections[registration.displayId], ...changes } },
+          }));
+        };
+        const sendResync = () => {
+          const cursor = gatewayOrderRef.current;
+          if (!mounted || resyncRequested || socket.readyState !== WebSocket.OPEN || socketSessionId === null ||
+              socketSessionId !== cursor.sessionId || cursor.sequence === null) return;
+          socket.send(JSON.stringify({ kind: 'resync', protocolVersion: PROTOCOL_VERSION, sessionId: cursor.sessionId,
+            traceId: traceId(), afterSequence: cursor.sequence }));
+          resyncRequested = true;
+        };
+        const applyDomainEvent = (event: GatewayDomainEvent) => {
+          const payload = event.payload as any;
+          if (event.type === 'vehicle.state.updated') setState((current) => ({ ...current, speedKph: payload.vehicle?.speedKph ?? current.speedKph }));
+          else if (event.type === 'driver.load.updated') setState((current) => ({ ...current, load: payload.level ?? current.load }));
+          else if (event.type === 'connectivity.state.changed') setState((current) => ({ ...current, connectivity: { mode: payload.mode ?? current.connectivity.mode, source: payload.source ?? current.connectivity.source } }));
+          else if (event.type === 'proposal.created') {
+            if (payload.proposal) setState((current) => ({ ...current, proposals: updateProposal(current.proposals, payload.proposal) }));
+          } else if (event.type === 'proposal.status.changed') {
+            const { proposalId, status, reasonCode } = payload;
+            setState((current) => ({ ...current, proposals: current.proposals.map((proposal) => proposal.proposalId === proposalId ? { ...proposal, status, lastReasonCode: reasonCode } : proposal) }));
+          } else if (event.type === 'proposal.consent.recorded') {
+            const { proposalId, decision } = payload;
+            setState((current) => ({ ...current, proposals: current.proposals.map((proposal) => proposal.proposalId === proposalId ? { ...proposal, consentGranted: decision === 'approve' } : proposal) }));
+          } else if (event.type === 'proposal.policy.decided') {
+            const decision = payload.decision;
+            if (decision) setState((current) => ({ ...current, proposals: current.proposals.map((proposal) => proposal.proposalId === decision.proposalId ? { ...proposal, lastOutcome: decision.outcome, lastPolicyReason: decision.reasonCode } : proposal) }));
+          } else if (event.type === 'journey.stop.added') {
+            const stop = payload.stop;
+            if (stop) setState((current) => ({ ...current, journeyStops: current.journeyStops.some((item) => item.stopId === stop.stopId) ? current.journeyStops : [...current.journeyStops, stop] }));
+          } else if (event.type === 'safety.override.activated') {
+            if (payload.warning) setState((current) => ({ ...current, activeSafetyWarning: payload.warning }));
+          } else if (event.type === 'safety.warning.cleared') {
+            const { warningId } = payload;
+            setState((current) => current.activeSafetyWarning?.warningId === warningId ? { ...current, activeSafetyWarning: null } : current);
+          }
+        };
         socket.addEventListener('open', () => {
+          if (!mounted || socketsRef.current[registration.displayId] !== socket) return;
+          reconnected = reconnecting.delete(registration.displayId);
+          if (reconnected) {
+            gatewayOrderRef.current.pendingEvents.clear();
+            resyncRequested = false;
+          }
           socket.send(JSON.stringify({ kind: 'register', protocolVersion: PROTOCOL_VERSION, displayId: registration.displayId, deviceId: registration.deviceId, traceId: traceId() }));
-          setConnection({ lastMessage: 'Registration sent' });
+          setConnection({ status: 'connecting', sessionId: null, lastMessage: 'Registration sent' });
         });
         socket.addEventListener('message', (message) => {
+          if (!mounted || socketsRef.current[registration.displayId] !== socket) return;
           if (registration.displayId === 'center-main' && message.data instanceof ArrayBuffer) {
             if (audioOutputActiveRef.current) playPcm(message.data);
             return;
@@ -217,54 +283,68 @@ export function useAuraCommand() {
           }
           catch { setConnection({ lastMessage: 'Received invalid gateway JSON' }); return; }
           if (data.kind === 'welcome') {
-            if (data.displayId !== registration.displayId || data.role !== registration.role || typeof data.sessionId !== 'string') {
+            const nextCursor = data.protocolVersion === PROTOCOL_VERSION && data.displayId === registration.displayId && data.role === registration.role
+              ? establishGatewaySession(gatewayOrderRef.current, data)
+              : null;
+            if (!nextCursor) {
               setConnection({ sessionId: null, status: 'error', lastMessage: 'Gateway welcome did not match this display registration' });
             } else {
+              // Reset exponential backoff only after registration is accepted,
+              // not merely after the transport socket opens.
+              failedAttempts.set(registration.displayId, 0);
+              if (nextCursor.sessionId !== null && nextCursor.sessionId !== gatewayOrderRef.current.sessionId) {
+                if (seenSessions.has(nextCursor.sessionId)) return;
+                seenSessions.add(nextCursor.sessionId);
+                gatewayOrderRef.current = nextCursor;
+                resyncRequested = false;
+                setState((current) => ({ ...current, speedKph: initialState.speedKph, load: initialState.load,
+                  connectivity: initialState.connectivity, proposals: [], journeyStops: [], activeSafetyWarning: null, presence: null }));
+              } else gatewayOrderRef.current = nextCursor;
+              socketSessionId = nextCursor.sessionId;
               setConnection({ sessionId: data.sessionId, status: 'connected', lastMessage: `Registered as ${data.displayId} / ${data.role}` });
+              if (reconnected) sendResync();
               if (isPresenceSnapshot(data.presence)) setState((current) => ({ ...current, presence: latestPresence(current.presence, data.presence) }));
             }
           } else if (data.kind === 'snapshot') {
-            const shared = data.snapshot?.state;
-            if (shared) setState((current) => ({
+            const snapshot = data.snapshot;
+            const shared = snapshot?.state;
+            const result = acceptGatewaySnapshot(gatewayOrderRef.current, snapshot);
+            if (result.accepted) gatewayOrderRef.current = result.cursor;
+            setState((current) => ({
               ...current,
-              presence: latestPresence(current.presence, data.snapshot?.presence),
-              speedKph: shared.vehicle?.speedKph ?? current.speedKph,
-              load: shared.driver?.currentLoad ?? current.load,
-              connectivity: shared.connectivity ? { mode: shared.connectivity.mode, source: shared.connectivity.source } : current.connectivity,
-              proposals: Array.isArray(shared.activeProposals) ? shared.activeProposals : current.proposals,
-              journeyStops: Array.isArray(shared.journey?.stops) ? shared.journey.stops : current.journeyStops,
-              activeSafetyWarning: shared.activeSafetyWarning ?? null,
+              presence: result.accepted ? latestPresence(current.presence, snapshot?.presence) : current.presence,
+              ...(result.accepted && shared ? {
+                speedKph: shared.vehicle?.speedKph ?? current.speedKph,
+                load: shared.driver?.currentLoad ?? current.load,
+                connectivity: shared.connectivity ? { mode: shared.connectivity.mode, source: shared.connectivity.source } : current.connectivity,
+                proposals: Array.isArray(shared.activeProposals) ? shared.activeProposals : current.proposals,
+                journeyStops: Array.isArray(shared.journey?.stops) ? shared.journey.stops : current.journeyStops,
+                activeSafetyWarning: shared.activeSafetyWarning ?? null,
+              } : {}),
               connections: { ...current.connections, [registration.displayId]: { ...current.connections[registration.displayId], lastMessage: 'Shared state snapshot received' } },
             }));
+            if (result.accepted) {
+              result.events.forEach(applyDomainEvent);
+              resyncRequested = false;
+              if (result.gap) sendResync();
+            }
           } else if (data.kind === 'presence.state.changed') {
+            if (socketSessionId === null || socketSessionId !== gatewayOrderRef.current.sessionId) return;
             setState((current) => ({ ...current, presence: latestPresence(current.presence, data.presence) }));
           } else if (data.kind === 'event') {
             const event = data.event;
-            if (event?.type === 'vehicle.state.updated') setState((current) => ({ ...current, speedKph: event.payload?.vehicle?.speedKph ?? current.speedKph }));
-            else if (event?.type === 'driver.load.updated') setState((current) => ({ ...current, load: event.payload?.level ?? current.load }));
-            else if (event?.type === 'connectivity.state.changed') setState((current) => ({ ...current, connectivity: { mode: event.payload?.mode ?? current.connectivity.mode, source: event.payload?.source ?? current.connectivity.source } }));
-            else if (event?.type === 'proposal.created') {
-              const proposal = event.payload?.proposal;
-              if (proposal) setState((current) => ({ ...current, proposals: updateProposal(current.proposals, proposal) }));
-            } else if (event?.type === 'proposal.status.changed') {
-              const { proposalId, status, reasonCode } = event.payload ?? {};
-              setState((current) => ({ ...current, proposals: current.proposals.map((proposal) => proposal.proposalId === proposalId ? { ...proposal, status, lastReasonCode: reasonCode } : proposal) }));
-            } else if (event?.type === 'proposal.consent.recorded') {
-              const { proposalId, decision } = event.payload ?? {};
-              setState((current) => ({ ...current, proposals: current.proposals.map((proposal) => proposal.proposalId === proposalId ? { ...proposal, consentGranted: decision === 'approve' } : proposal) }));
-            } else if (event?.type === 'proposal.policy.decided') {
-              const decision = event.payload?.decision;
-              if (decision) setState((current) => ({ ...current, proposals: current.proposals.map((proposal) => proposal.proposalId === decision.proposalId ? { ...proposal, lastOutcome: decision.outcome, lastPolicyReason: decision.reasonCode } : proposal) }));
-            } else if (event?.type === 'journey.stop.added') {
-              const stop = event.payload?.stop;
-              if (stop) setState((current) => ({ ...current, journeyStops: current.journeyStops.some((item) => item.stopId === stop.stopId) ? current.journeyStops : [...current.journeyStops, stop] }));
-            } else if (event?.type === 'safety.override.activated') {
-              const warning = event.payload?.warning;
-              if (warning) setState((current) => ({ ...current, activeSafetyWarning: warning }));
-            } else if (event?.type === 'safety.warning.cleared') {
-              const { warningId } = event.payload ?? {};
-              setState((current) => current.activeSafetyWarning?.warningId === warningId ? { ...current, activeSafetyWarning: null } : current);
+            const result = acceptGatewayEvent(gatewayOrderRef.current, event);
+            if (result.overflow) {
+              // The bounded pending queue was discarded; request an authoritative
+              // replay/snapshot now instead of silently keeping a partial state.
+              sendResync();
+              return;
             }
+            if (!result.accepted) return;
+            gatewayOrderRef.current = result.cursor;
+            result.events.forEach(applyDomainEvent);
+            if (!result.gap) resyncRequested = false;
+            else sendResync();
           } else if (data.kind === 'places.search.results' && registration.displayId === 'front-passenger-main') {
             const slot = data.slot === 'origin' ? 'origin' : 'destination';
             setDiscovery((current) => data.requestId !== current[slot].requestId ? current : ({ ...current, [slot]: {
@@ -356,10 +436,17 @@ export function useAuraCommand() {
           }
         });
         socket.addEventListener('error', () => {
+          if (!mounted || socketsRef.current[registration.displayId] !== socket) return;
+          reconnecting.add(registration.displayId);
+          resyncRequested = false;
           setConnection({ status: 'error', lastMessage: 'Gateway connection error' });
           if (registration.displayId === 'front-passenger-main') setDiscovery({ origin: emptySearch(), destination: emptySearch(), route: emptyRoute() });
+          scheduleReconnect(registration);
         });
         socket.addEventListener('close', () => {
+          if (!mounted || socketsRef.current[registration.displayId] !== socket) return;
+          reconnecting.add(registration.displayId);
+          resyncRequested = false;
           setConnection({ status: 'disconnected', sessionId: null, lastMessage: 'Gateway connection closed' });
           if (registration.displayId === 'front-passenger-main') setDiscovery({ origin: emptySearch(), destination: emptySearch(), route: emptyRoute() });
           if (registration.displayId === 'center-main' && recommendationRequestRef.current) {
@@ -375,12 +462,15 @@ export function useAuraCommand() {
             voiceTraceRef.current = null;
             updateVoice({ status: 'ERROR', error: 'Gateway connection closed during the voice session.' });
           }
+          scheduleReconnect(registration);
         });
       } catch {
         setState((current) => ({ ...current, connections: { ...current.connections, [registration.displayId]: { ...current.connections[registration.displayId], status: 'error', lastMessage: 'Could not open gateway connection' } } }));
+        scheduleReconnect(registration);
       }
-    }
-    return () => { releaseCapture(); if (recommendationTimeoutRef.current) clearTimeout(recommendationTimeoutRef.current); recommendationTimeoutRef.current = null; recommendationRequestRef.current = null; sockets.forEach((socket) => socket.close()); socketsRef.current = {}; };
+    };
+    for (const registration of DISPLAY_REGISTRATIONS) connect(registration);
+    return () => { mounted = false; retryTimers.forEach(clearTimeout); retryTimers.clear(); releaseCapture(); if (recommendationTimeoutRef.current) clearTimeout(recommendationTimeoutRef.current); recommendationTimeoutRef.current = null; recommendationRequestRef.current = null; sockets.forEach((socket) => socket.close()); socketsRef.current = {}; };
   }, [playPcm, releaseCapture, updateVoice]);
 
   const startVoice = useCallback(async () => {

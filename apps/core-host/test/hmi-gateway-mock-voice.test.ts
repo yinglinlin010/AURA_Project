@@ -22,6 +22,14 @@ test("mock voice transports PCM through WebSocket VAD, routes the canned proposa
   delete process.env.AURA_LOCAL_MODEL;
 
   const runtime = new CoreRuntime({ registry });
+  runtime.ingestSignal({
+    signalId: "voice-test-driver-load",
+    type: "driver.cognitive_load",
+    value: { level: "normal", confidence: 1 },
+    source: "simulated",
+    timestamp: Date.now(),
+    confidence: 1,
+  }, "voice-test-driver-load-trace");
   const output = new GatewayVoiceOutput((socket, message) => {
     if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
   });

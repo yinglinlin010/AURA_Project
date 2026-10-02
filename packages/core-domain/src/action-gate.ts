@@ -48,9 +48,20 @@ export function evaluateActionProposal(input: ActionGateInput): PolicyDecision {
     };
   }
 
-  if (
-    (state.driver.currentLoad === "high" || state.driver.currentLoad === "critical")
-  ) {
+  if (state.driver.currentLoad === undefined) {
+    return {
+      ...base,
+      outcome: "DEFER",
+      reasonCode: "DRIVER_LOAD_UNAVAILABLE",
+      deferUntil: {
+        type: "driver_load_below",
+        currentThreshold: "high",
+        reevaluateOn: "driver.cognitive_load",
+      },
+    };
+  }
+
+  if (state.driver.currentLoad === "high" || state.driver.currentLoad === "critical") {
     return {
       ...base,
       outcome: "DEFER",
@@ -74,9 +85,6 @@ export function evaluateActionProposal(input: ActionGateInput): PolicyDecision {
   return {
     ...base,
     outcome: "ROUTE",
-    reasonCode:
-      state.driver.currentLoad === undefined
-        ? "DRIVER_LOAD_NOT_REPORTED_ROUTE_TO_TARGET"
-        : "DRIVER_LOAD_BELOW_DEFERRAL_THRESHOLD",
+    reasonCode: "DRIVER_LOAD_BELOW_DEFERRAL_THRESHOLD",
   };
 }

@@ -23,6 +23,16 @@ interface GatewayClient {
 
 async function createRegisteredClient(role: "center" | "front_passenger", simulatedSource = false): Promise<GatewayClient> {
   const runtime = new CoreRuntime({ registry });
+  if (simulatedSource) {
+    runtime.ingestSignal({
+      signalId: "recommendation-test-driver-load",
+      type: "driver.cognitive_load",
+      value: { level: "normal", confidence: 1 },
+      source: "simulated",
+      timestamp: Date.now(),
+      confidence: 1,
+    }, "recommendation-test-driver-load-trace");
+  }
   const gateway = new HmiGateway({
     runtime,
     registry,

@@ -7,8 +7,15 @@ description: >-
   mock output cancellation on barge-in, and explicit stop. It does not evidence
   wake-word detection, real STT/TTS, browser audio, or an HMI WebSocket session.
 timeline:
-  - id: touch-invocation
+  - id: driver-load-normal-initial
     atMs: 0
+    kind: signal
+    signal:
+      type: driver.cognitive_load
+      value: { level: normal, confidence: 0.9 }
+      confidence: 0.9
+  - id: touch-invocation
+    atMs: 10
     kind: voice.start
   - id: normalized-voice-request
     atMs: 100

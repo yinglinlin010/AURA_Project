@@ -40,6 +40,17 @@ function envelope(runtime: CoreRuntime, commandId: string, command: CommandEnvel
   };
 }
 
+function reportNormalLoad(runtime: CoreRuntime, signalId: string): void {
+  runtime.ingestSignal({
+    signalId,
+    type: "driver.cognitive_load",
+    value: { level: "normal", confidence: 1 },
+    source: "simulated",
+    timestamp: Date.now(),
+    confidence: 1,
+  }, `${signalId}-trace`);
+}
+
 test("consented Journey update writes only Place IDs and restores after host restart", () => {
   const directory = mkdtempSync(join(tmpdir(), "aura-host-journey-"));
   const databasePath = join(directory, "journeys.sqlite");
@@ -49,6 +60,7 @@ test("consented Journey update writes only Place IDs and restores after host res
       registry,
       persistJourney: (journey) => persistJourney(store, ACTIVE_JOURNEY_ID, journey),
     });
+    reportNormalLoad(runtime, "journey-persistence-load");
     const proposed = runtime.proposeAction(request, "front_passenger", "trace-propose");
     assert.equal(proposed.decision.outcome, "ROUTE");
 
@@ -79,6 +91,7 @@ test("consented Journey update writes only Place IDs and restores after host res
 
 test("Journey persistence failure rejects consent before changing Journey state", () => {
   const runtime = new CoreRuntime({ registry, persistJourney: () => { throw new Error("JOURNEY_PERSISTENCE_FAILED"); } });
+  reportNormalLoad(runtime, "journey-persistence-failure-load");
   runtime.proposeAction(request, "front_passenger", "trace-propose-failure");
 
   const receipt = runtime.submitCommand(envelope(runtime, "approve-place-failure", {

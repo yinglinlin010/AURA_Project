@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import passengerReference from '../../../AURA_UI_UX_Handoff/images/03_passenger_display_final.jpg';
 import windowReference from '../../../AURA_UI_UX_Handoff/images/05_interactive_window_final.jpg';
 import { resolveBrand } from '../../../packages/core-domain/src/brand';
+import { resolvePresentation } from '../../../packages/core-domain/src/presentation-resolver';
 import type { PresenceSnapshot } from '../../../contracts/protocol/src/types';
 import { DISPLAY_REGISTRATIONS, useAuraCommand, type DiscoveryState, type GatewayState, type JourneyRecommendationState, type RecommendationProposal, type SharedProposal, type SharedSafetyWarning, type SharedStop, type TransientPlace } from './core/useAuraCommand';
 import './App.css';
@@ -52,8 +53,9 @@ function ScreenHeading({ title, details, gatewayStatus, presence, windowExamples
   return <div className="screen-heading"><h1>{title}</h1><span className="screen-heading-meta"><span>{details} · Gateway {gatewayStatus}</span><PresenceBadge presence={presence}/>{windowExamples && <small className="window-example-label">SIMULATED EXAMPLES</small>}</span></div>;
 }
 
-function Cluster({ speedKph, warning }: { speedKph: number; warning: SharedSafetyWarning | null }) {
-  return <section className={`device cluster-device ${warning ? 'safety-active' : ''}`} aria-label="Cluster display preview">
+function Cluster({ speedKph, warning, presentation }: { speedKph: number; warning: SharedSafetyWarning | null; presentation: ReturnType<typeof resolvePresentation> }) {
+  const densityClass = presentation.informationDensity === 'reduced' ? 'load-reduced' : presentation.informationDensity === 'safety_only' ? 'load-critical' : '';
+  return <section className={`device cluster-device ${densityClass} ${warning ? 'safety-active' : ''}`} aria-label="Cluster display preview">
     <div className="cluster-head"><span>14:38&nbsp;&nbsp; 21°C</span><span className="drive-mode">DRIVE</span><span className="indicator-lights"><i>◉</i><b>●</b></span></div>
     {warning && <div className="cluster-safety-warning" role="alert" aria-live="assertive"><b>CRITICAL SAFETY WARNING</b><span>Immediate safety condition · {warning.source === 'simulated' ? 'SIMULATED' : warning.source.toUpperCase()}</span></div>}
     <div className="cluster-main">
@@ -146,18 +148,19 @@ function RecommendationResult({ recommendation, proposals, onSubmit }: { recomme
   </div>;
 }
 
-function CenterDisplay({ proposals, journeyStops, connection, load, warning, recommendation, onConsent, onRecommendationRequest, onRecommendationSubmit }: { proposals: SharedProposal[]; journeyStops: SharedStop[]; connection: { status: string; lastMessage: string }; load: 'low' | 'normal' | 'high' | 'critical' | null; warning: SharedSafetyWarning | null; recommendation: JourneyRecommendationState; onConsent: (proposalId: string, decision: 'approve' | 'decline') => void; onRecommendationRequest: (text: string) => boolean; onRecommendationSubmit: (proposal: RecommendationProposal) => void }) {
+function CenterDisplay({ proposals, journeyStops, connection, warning, presentation, recommendation, onConsent, onRecommendationRequest, onRecommendationSubmit }: { proposals: SharedProposal[]; journeyStops: SharedStop[]; connection: { status: string; lastMessage: string }; warning: SharedSafetyWarning | null; presentation: ReturnType<typeof resolvePresentation>; recommendation: JourneyRecommendationState; onConsent: (proposalId: string, decision: 'approve' | 'decline') => void; onRecommendationRequest: (text: string) => boolean; onRecommendationSubmit: (proposal: RecommendationProposal) => void }) {
   const stopProposals = proposals.filter((item) => item.kind === 'ADD_TRIP_STOP' && item.targetRole === 'center');
   const guidanceProposals = proposals.filter((item) => item.kind === 'SHOW_GUIDANCE' && item.targetRole === 'center');
   const routePreviewProposals = proposals.filter((item) => item.kind === 'SHOW_INFORMATION' && item.targetRole === 'center' && item.payload?.discoveryMode === 'route_preview');
   const centerProposals = [...stopProposals, ...guidanceProposals, ...routePreviewProposals];
   const hasDeferredProposal = centerProposals.some((item) => item.status === 'deferred');
-  const proposalDetailsVisible = load === 'low' || load === 'normal';
+  const proposalDetailsVisible = presentation.load !== undefined && !presentation.deferNonCritical && !presentation.suppressNonSafetyContent;
   const [recommendationText, setRecommendationText] = useState('');
-  const recommendationUnavailable = Boolean(warning) || load === 'high' || load === 'critical' || load === null;
+  const recommendationUnavailable = presentation.load === undefined || presentation.deferNonCritical || presentation.suppressNonSafetyContent;
   const submittedProposal = recommendation.status === 'submitted' ? proposals.find((item) => item.proposalId === recommendation.proposal.proposalId) : undefined;
   const recommendationBusy = recommendation.status === 'pending' || (recommendation.status === 'submitted' && (!submittedProposal || !['completed', 'declined', 'rejected', 'cancelled', 'interrupted'].includes(submittedProposal.status)));
-  return <section className={`device center-device ${load === 'high' ? 'load-high' : ''} ${load === 'critical' ? 'load-critical' : ''} ${warning ? 'safety-active' : ''}`} aria-label="Center display preview">
+  const densityClass = presentation.informationDensity === 'reduced' ? 'load-reduced' : presentation.informationDensity === 'safety_only' ? 'load-critical' : '';
+  return <section className={`device center-device ${densityClass} ${warning ? 'safety-active' : ''}`} aria-label="Center display preview">
     <aside className="journey-column">
       <h2>Journey <small className="journey-source-label">SIMULATED SCENARIO</small><small className={`display-connection ${connection.status}`}>Gateway {connection.status}</small></h2>
       <div className="journey-timeline">
@@ -179,16 +182,16 @@ function CenterDisplay({ proposals, journeyStops, connection, load, warning, rec
             <input id="journey-recommendation-request" value={recommendationText} maxLength={1000} disabled={recommendationBusy} onChange={(event) => setRecommendationText(event.target.value)} placeholder="Ask about this journey… e.g. a quick dinner stop" />
             <button type="submit" disabled={recommendationBusy || !recommendationText.trim()}>Recommend</button>
           </form>}
-          {load === null && !warning && <span className="recommendation-paused" role="status">Waiting for a current driver-load state before showing journey suggestions.</span>}
-          {(load === 'high' || load === 'critical') && !warning && <span className="recommendation-paused" role="status">Paused while driver attention is needed.</span>}
-          {recommendation.status === 'pending' && proposalDetailsVisible && !warning && <span className="recommendation-pending" role="status">Checking current journey evidence…</span>}
-          {proposalDetailsVisible && !warning && <RecommendationResult recommendation={recommendation} proposals={proposals} onSubmit={onRecommendationSubmit}/>}
+          {presentation.load === undefined && !presentation.suppressNonSafetyContent && <span className="recommendation-paused" role="status">Waiting for a current driver-load state before showing journey suggestions.</span>}
+          {presentation.deferNonCritical && !presentation.suppressNonSafetyContent && <span className="recommendation-paused" role="status">Paused while driver attention is needed.</span>}
+          {recommendation.status === 'pending' && proposalDetailsVisible && <span className="recommendation-pending" role="status">Checking current journey evidence…</span>}
+          {proposalDetailsVisible && <RecommendationResult recommendation={recommendation} proposals={proposals} onSubmit={onRecommendationSubmit}/>}
         </div>
       </div>
       {proposalDetailsVisible && centerProposals.filter((item) => item.status === 'awaiting_consent' && item.requiresConsent).map((item) => <div className="proposal-panel" key={item.proposalId}><div><span className="proposal-kicker">{item.kind === 'SHOW_GUIDANCE' ? 'SIMULATED parking context · driver choice' : item.payload?.discoveryMode === 'route_preview' ? 'Passenger route preview · provider data · driver choice' : 'Passenger proposal · shared gateway state'}</span><b>{item.summary}</b><span>{proposalStateLabel(item)}</span>{item.kind === 'SHOW_GUIDANCE' && <span>Source: simulator · Freshness: {String((item.payload?.freshness as { state?: string } | undefined)?.state ?? 'unknown')} · no vehicle control</span>}{item.payload?.discoveryMode === 'route_preview' && <span>Route: API · {String(item.payload.provider)} · Freshness: {String(item.payload.freshness ?? 'unknown')} · observed {new Date(Number(item.payload.observedAt)).toLocaleTimeString()} · {String(item.payload.attribution)}</span>}{item.payload?.discoveryMode === 'route_preview' && <span>Place: API · {String(item.payload.placeProvider)} · Freshness: {String(item.payload.placeFreshness ?? 'unknown')} · observed {new Date(Number(item.payload.placeObservedAt)).toLocaleTimeString()} · {String(item.payload.placeAttribution)} · consent reviews only; journey unchanged</span>}</div><button className="quiet-action" onClick={() => onConsent(item.proposalId, 'decline')}><Icon name="close"/> Decline</button><button className="accept-action" onClick={() => onConsent(item.proposalId, 'approve')}><Icon name="check"/> Approve</button></div>)}
       {proposalDetailsVisible && routePreviewProposals.filter((item) => item.status === 'completed' || item.status === 'declined').map((item) => <div className="proposal-panel guidance-result" key={item.proposalId}><div><span className="proposal-kicker">Passenger route preview · API · temporary use</span><b>{proposalStateLabel(item)}</b><span>{item.summary}</span><small>Route freshness: {String(item.payload?.freshness ?? 'unknown')} · observed {new Date(Number(item.payload?.observedAt)).toLocaleTimeString()} · {String(item.payload?.attribution ?? 'Attribution unavailable')}</small><small>Place freshness: {String(item.payload?.placeFreshness ?? 'unknown')} · observed {new Date(Number(item.payload?.placeObservedAt)).toLocaleTimeString()} · {String(item.payload?.placeAttribution ?? 'Attribution unavailable')}</small></div></div>)}
       {proposalDetailsVisible && guidanceProposals.filter((item) => item.status === 'executing' || item.status === 'completed' || item.status === 'declined').map((item) => <div className="proposal-panel guidance-result" key={item.proposalId}><div><span className="proposal-kicker">SIMULATED parking assistance</span><b>{proposalStateLabel(item)}</b><span>Source: simulator · no vehicle control</span></div></div>)}
-      {load === 'high' && (hasDeferredProposal || recommendation.status === 'proposal' || recommendation.status === 'pending') && <span className="deferred-proposal-indicator" aria-label="Journey recommendation details are waiting until driver load is lower" title="Journey recommendation details are waiting until driver load is lower" />}
+      {presentation.centerHighLoadMarkerEligible && hasDeferredProposal && <span className="deferred-proposal-indicator" aria-label="Journey recommendation details are waiting until driver load is lower" title="Journey recommendation details are waiting until driver load is lower" />}
       {connection.status !== 'connected' && <div className="gateway-display-error">Center gateway {connection.status}: {connection.lastMessage}</div>}
       <div className="center-actions"><button><b>Navigate</b><span>Route options</span></button><button><b>Radio</b><span>FM 98.4</span></button><button><b>Climate</b><span>22°C Auto</span></button><button><b>Phone</b><span>Connected</span></button></div>
     </div>
@@ -337,6 +340,8 @@ function App() {
   const clusterConnection = gateway.connections['cluster-main'];
   const rearConnection = gateway.connections['rear-tablet'];
   const windowConnection = gateway.connections['window-tablet'];
+  const clusterPresentation = resolvePresentation({ role: 'cluster', ...(gateway.load ? { load: gateway.load } : {}), activeSafetyWarning: gateway.activeSafetyWarning !== null });
+  const centerPresentation = resolvePresentation({ role: 'center', ...(gateway.load ? { load: gateway.load } : {}), activeSafetyWarning: gateway.activeSafetyWarning !== null });
   const passengerProposal = [...gateway.proposals].reverse().find((item) => (item.kind === 'ADD_TRIP_STOP' || item.payload?.discoveryMode === 'route_preview') && item.targetRole === 'center');
   const voiceActive = voice.status !== 'IDLE' && voice.status !== 'ERROR';
   const setConnectivity = (mode: 'online' | 'degraded' | 'offline') => sendCommand('center-main', { type: 'connectivity.mode.report', payload: { mode, evidence: 'CONTROL_CONSOLE_SIMULATION' } });
@@ -349,7 +354,7 @@ function App() {
       {voice.outputTranscript && <span><b>{BRAND.assistantName}:</b> {voice.outputTranscript}</span>}
     </div>}
     <div className="vehicle-layout">
-      <div className="driver-zone"><ScreenHeading title="Driver display" details="Cluster" gatewayStatus={clusterConnection.status} presence={gateway.presence}/><Cluster speedKph={gateway.speedKph} warning={gateway.activeSafetyWarning}/><ScreenHeading title="Journey & control" details="Center" gatewayStatus={centerConnection.status} presence={gateway.presence}/><CenterDisplay proposals={gateway.proposals} journeyStops={gateway.journeyStops} connection={centerConnection} load={gateway.load} warning={gateway.activeSafetyWarning} recommendation={recommendation} onRecommendationRequest={requestJourneyRecommendation} onRecommendationSubmit={(proposal) => { submitJourneyRecommendation(proposal); }} onConsent={(proposalId, decision) => sendCommand('center-main', { type: 'action.consent', payload: { proposalId, decision } })}/></div>
+      <div className="driver-zone"><ScreenHeading title="Driver display" details="Cluster" gatewayStatus={clusterConnection.status} presence={gateway.presence}/><Cluster speedKph={gateway.speedKph} warning={gateway.activeSafetyWarning} presentation={clusterPresentation}/><ScreenHeading title="Journey & control" details="Center" gatewayStatus={centerConnection.status} presence={gateway.presence}/><CenterDisplay proposals={gateway.proposals} journeyStops={gateway.journeyStops} connection={centerConnection} warning={gateway.activeSafetyWarning} presentation={centerPresentation} recommendation={recommendation} onRecommendationRequest={requestJourneyRecommendation} onRecommendationSubmit={(proposal) => { submitJourneyRecommendation(proposal); }} onConsent={(proposalId, decision) => sendCommand('center-main', { type: 'action.consent', payload: { proposalId, decision } })}/></div>
       <div className="passenger-zone"><ScreenHeading title="Passenger discovery" details="Front passenger" gatewayStatus={passengerConnection.status} presence={gateway.presence}/><PassengerDisplay discovery={discovery} searchPlaces={searchPlaces} previewRoute={previewRoute} proposal={passengerProposal} connection={passengerConnection} onProposal={(place, route, originLabel) => {
         const pathSummary = `${(route.distanceMeters / 1000).toFixed(1)} km · ${(route.durationSeconds / 60).toFixed(0)} min`;
         const payload = discovery.route;

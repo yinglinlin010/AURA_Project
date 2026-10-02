@@ -19,6 +19,13 @@ timeline:
     signal:
       type: connectivity.mode
       value: { mode: online, evidence: SIMULATED_CLOUD_AVAILABLE }
+  - id: driver-load-normal-initial
+    atMs: 50
+    kind: signal
+    signal:
+      type: driver.cognitive_load
+      value: { level: normal, confidence: 0.9 }
+      confidence: 0.9
   - id: restaurant-request
     atMs: 100
     kind: intent

@@ -35,6 +35,12 @@
 .cluster-device.safety-active .trip-readout,
 .cluster-device.safety-active .rpm-gauge,
 .cluster-device.safety-active .power-gauge { display: none; }
+.cluster-device.load-reduced .trip-readout,
+.cluster-device.load-reduced .rpm-gauge,
+.cluster-device.load-reduced .power-gauge,
+.cluster-device.load-critical .trip-readout,
+.cluster-device.load-critical .rpm-gauge,
+.cluster-device.load-critical .power-gauge { display: none; }
 .cluster-device.safety-active .cluster-main { height: 72%; grid-template-columns: 1fr 1fr; }
 .cluster-device.safety-active .speed-readout { grid-column: 1; }.cluster-device.safety-active .vehicle-readout { grid-column: 2; }
 .cluster-head { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; color: #c2c2c5; font-size: clamp(9px, .85vw, 13px); }
@@ -71,7 +77,7 @@
 /* Center: a journey ledger beside the larger map and decision area. */
 .center-device { display: grid; grid-template-columns: 34% 66%; aspect-ratio: 16 / 9; border-radius: 7px; }
 .deferred-proposal-indicator { position: absolute; z-index: 4; top: 50%; right: 0; width: 4px; height: 12px; background: var(--orange); transform: translateY(-50%); }
-.center-device.load-high .center-actions { visibility: hidden; }
+.center-device.load-reduced .center-actions { visibility: hidden; }
 .center-device.load-critical .journey-column,
 .center-device.load-critical .center-actions,
 .center-device.load-critical .device-status,
