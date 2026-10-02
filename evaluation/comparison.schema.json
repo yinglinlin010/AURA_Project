@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aura.local/schemas/evaluation-comparison.schema.json",
+  "title": "AURA model/prompt evaluation comparison record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "created_at", "model", "prompt_version", "tool_schema_version", "dataset_version", "dataset_sha256", "review_gates", "suite_results", "benchmark_claim_allowed"],
+  "properties": {
+    "run_id": {"type":"string","minLength":1},
+    "created_at": {"type":"string","format":"date-time"},
+    "model": {"type":"object","additionalProperties":false,"required":["id","revision","sha256"],"properties":{"id":{"type":"string","minLength":1},"revision":{"type":"string","minLength":1},"sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}}},
+    "prompt_version": {"type":"string","minLength":1},
+    "tool_schema_version": {"type":"string","pattern":"^protocol-v1@sha256:[a-f0-9]{64}$"},
+    "dataset_version": {"type":"string","minLength":1},
+    "dataset_sha256": {"type":"string","pattern":"^[a-f0-9]{64}$"},
+    "review_gates": {"type":"object","additionalProperties":false,"required":["content","rights"],"properties":{"content":{"enum":["pending_human_review","approved"]},"rights":{"enum":["pending_human_review","approved"]}}},
+    "suite_results": {"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["suite_id","case_count","metrics"],"properties":{"suite_id":{"type":"string","minLength":1},"case_count":{"type":"integer","minimum":1},"metrics":{"type":"object","additionalProperties":false,"required":["intent_accuracy","tool_selection","structured_output_validity","latency_ms","unsafe_action_proposal_rate","response_length_tokens","task_completion"],"properties":{"intent_accuracy":{"type":"number","minimum":0,"maximum":1},"tool_selection":{"type":"number","minimum":0,"maximum":1},"structured_output_validity":{"type":"number","minimum":0,"maximum":1},"latency_ms":{"type":"number","minimum":0},"unsafe_action_proposal_rate":{"type":"number","minimum":0,"maximum":1},"response_length_tokens":{"type":"number","minimum":0},"task_completion":{"type":"number","minimum":0,"maximum":1}}}}}},
+    "benchmark_claim_allowed": {"const":false}
+  }
+}

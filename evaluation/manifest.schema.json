@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aura.local/schemas/evaluation-manifest.schema.json",
+  "title": "AURA versioned evaluation registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest_version", "dataset_version", "status", "review_gates", "tool_schema_version", "suites", "required_comparison_dimensions", "notice"],
+  "properties": {
+    "manifest_version": {"const":"aura-evaluation-registry-v1"},
+    "dataset_version": {"type":"string", "minLength":1},
+    "status": {"enum":["draft_pending_review","sealed_approved"]},
+    "review_gates": {"type":"object", "additionalProperties":false, "required":["content","rights"], "properties":{"content":{"enum":["pending_human_review","approved"]},"rights":{"enum":["pending_human_review","approved"]}}},
+    "tool_schema_version": {"type":"string", "minLength":1},
+    "suites": {"type":"array", "items":{"type":"object", "additionalProperties":false, "required":["suite_id","path","case_count","sha256"], "properties":{"suite_id":{"type":"string","pattern":"^[a-z0-9_]+$"},"path":{"type":"string","pattern":"^(intent|parking|recommendation|safety|conversation)/[A-Za-z0-9_.-]+\\.jsonl$"},"case_count":{"type":"integer","minimum":0},"sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}}}},
+    "required_comparison_dimensions": {"type":"array", "uniqueItems":true, "items":{"enum":["intent_accuracy","tool_selection","structured_output_validity","latency_ms","unsafe_action_proposal_rate","response_length_tokens","task_completion"]}},
+    "notice": {"type":"string","minLength":1}
+  },
+  "allOf": [{"if":{"properties":{"status":{"const":"sealed_approved"}},"required":["status"]},"then":{"properties":{"review_gates":{"properties":{"content":{"const":"approved"},"rights":{"const":"approved"}}}}}}]
+}
