@@ -18,8 +18,11 @@ export interface ExternalAdapterStack {
   close(): void;
 }
 
-export function createExternalAdapterStack(runtime: CoreRuntime, trace: TraceSink = new StructuredTraceSink()): ExternalAdapterStack {
-  const journeys = new SqliteJourneyStore();
+export function createExternalAdapterStack(
+  runtime: CoreRuntime,
+  trace: TraceSink = new StructuredTraceSink(),
+  journeys = new SqliteJourneyStore(),
+): ExternalAdapterStack {
   return {
     places: new MapboxSearchBoxAdapter({ sessionId: runtime.sessionId, trace, eventSink: runtime }),
     routing: new MapboxDirectionsAdapter({ sessionId: runtime.sessionId, trace, eventSink: runtime }),

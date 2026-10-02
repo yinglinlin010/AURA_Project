@@ -8,6 +8,8 @@ import { HmiGateway } from "./hmi-gateway.js";
 import { GatewayVoiceOutput } from "./gateway-voice-output.js";
 import { createIntelligenceStack } from "./intelligence.js";
 import { createExternalAdapterStack, hasWeatherConfiguration } from "./external-adapters.js";
+import { SqliteJourneyStore } from "../../../adapters/persistence/sqlite-journey-store.js";
+import { ACTIVE_JOURNEY_ID, persistJourney, restoreJourney } from "./journey-persistence.js";
 
 function loadRegistry(): DisplayRegistry {
   const configPath = process.env.AURA_DISPLAY_REGISTRY ??
@@ -19,14 +21,19 @@ function loadRegistry(): DisplayRegistry {
 
 async function main(): Promise<void> {
   const registry = loadRegistry();
-  const runtime = new CoreRuntime({ registry });
+  const journeys = new SqliteJourneyStore();
+  const runtime = new CoreRuntime({
+    registry,
+    initialJourney: restoreJourney(journeys.get(ACTIVE_JOURNEY_ID)),
+    persistJourney: (journey) => persistJourney(journeys, ACTIVE_JOURNEY_ID, journey),
+  });
   // The deterministic demo is deliberately opt-in and always reports simulated fixture evidence.
   const journeyRecommendations = process.env.AURA_SIMULATED_JOURNEY_RECOMMENDATION === "true"
     ? new SimulatedJourneyRecommendationEvidenceSource()
     : undefined;
   // Build server-side providers only when configured; adapter construction makes no requests.
   const externalAdapters = process.env.MAPBOX_ACCESS_TOKEN?.trim() || hasWeatherConfiguration()
-    ? createExternalAdapterStack(runtime)
+    ? createExternalAdapterStack(runtime, undefined, journeys)
     : undefined;
   const audioOutput = new GatewayVoiceOutput((socket, message) => {
     if (socket.readyState === 1) socket.send(JSON.stringify(message));
@@ -50,7 +57,8 @@ async function main(): Promise<void> {
     try {
       await gateway.close();
     } finally {
-      externalAdapters?.close();
+      if (externalAdapters) externalAdapters.close();
+      else journeys.close();
       process.exit(0);
     }
   };

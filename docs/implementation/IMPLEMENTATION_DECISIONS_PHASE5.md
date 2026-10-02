@@ -11,7 +11,7 @@
 - Streamed Gemini proposal tool calls go through the Intelligence Router's schema validation and local policy gate; tool calls never execute effects directly.
 - `Gemma2BOfflineSimulator` is an explicitly simulated, deterministic-only local fallback seam. It handles a small fixed set of cabin volume and temperature commands; it does not load a model or perform inference.
 - Google Places Text Search and Routes Compute REST adapters normalize results and emit metadata-only runtime signals. The external stack exposes a separately named fixture weather adapter and a setting-controlled Open-Meteo adapter; the fixture is not a live fallback, and the Open-Meteo adapter is not called by host startup.
-- A local SQLite journey store retains user-authored journey inputs and Place IDs for at most seven days. Provider response content is transient and is not copied to the store or shared state.
+- A local SQLite journey store retains accepted Journey Place IDs for at most seven days. Core Runtime writes the candidate Journey synchronously before publishing an approved Journey event, and Core Host restores the unexpired Place IDs before opening the Gateway. Because `JourneyStop` does not retain source provenance, restoration deliberately uses generic labels, never cached provider labels/categories. Stops with no Place ID are not stored until the protocol can reliably distinguish user-authored text from provider/model text. A persistence failure rejects the direct consent command without recording approval or changing Journey state.
 - Core-host factories wire the Router, voice runtime, local fallback, Gemini adapter, Maps adapters, weather fixture, and SQLite store without depending on a UI or a particular audio device.
 
 ## Frozen technology choices
@@ -25,5 +25,5 @@
 
 - The new Architect stack resolves prior Master Spec/runtime-design proposals for this assignment. The Master Spec's earlier Ollama/Qwen local direction differs from the newly frozen Gemma 2B simulator choice. The simulator does not claim that Gemma weights or inference are present.
 - The sample router script injects a simulated cloud proposal source so it can demonstrate the text-query → Router → Action Gate → `ActionProposal` path without credentials. It is a demo script, not a live Gemini validation.
-- Places API content is subject to Google Maps Platform caching restrictions. Only Place IDs are persisted from Places results; labels and coordinates in saved journeys are user-supplied. Route results remain transient.
+- Places API content is subject to Google Maps Platform caching restrictions. This runtime persists only Place IDs from accepted stops; provider labels, categories, coordinates, and route results remain transient. The existing store still supports user-authored text/coordinates for a future provenance-aware input path, but the current proposal contract cannot safely assert that an arbitrary stop label is user-authored.
 - Required entry point: `npm run demo:router` after building. Live Gemini and Maps requests require `GEMINI_API_KEY` and `GOOGLE_MAPS_API_KEY`; credentials are never stored in source or traces.

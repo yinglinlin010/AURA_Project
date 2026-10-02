@@ -16,6 +16,8 @@ import type {
   CommandEnvelope,
   CommandReceipt,
   ConnectivityMode,
+  JourneyState,
+  JourneyStop,
   SignalFreshness,
   SignalSource,
   ContextIngestReceipt,
@@ -41,6 +43,10 @@ export interface CoreRuntimeOptions {
   registry?: DisplayRegistry;
   now?: () => number;
   eventHistoryLimit?: number;
+  /** Restored user Journey, loaded from an explicitly configured local store. */
+  initialJourney?: JourneyState;
+  /** Synchronous write-through hook; called before a Journey mutation is published. */
+  persistJourney?: (journey: JourneyState) => void;
 }
 
 interface StoredCommandReceipt {
@@ -58,9 +64,10 @@ export class CoreRuntime {
   readonly eventBus: EventBus;
   readonly taskCancellations = new TaskCancellationRegistry();
 
-  private state: AuraSharedState = createInitialState();
+  private state: AuraSharedState;
   private readonly now: () => number;
   private readonly registry: DisplayRegistry | undefined;
+  private readonly persistJourney: ((journey: JourneyState) => void) | undefined;
   private readonly commandReceipts = new Map<string, StoredCommandReceipt>();
   private readonly signalReceipts = new Map<
     string,
@@ -71,6 +78,11 @@ export class CoreRuntime {
     this.sessionId = options.sessionId ?? randomUUID();
     this.now = options.now ?? Date.now;
     this.registry = options.registry;
+    this.persistJourney = options.persistJourney;
+    this.state = {
+      ...createInitialState(),
+      journey: structuredClone(options.initialJourney ?? { stops: [] }),
+    };
     if (this.registry) assertDisplayRegistry(this.registry);
     this.eventBus = new EventBus({
       sessionId: this.sessionId,
@@ -501,6 +513,13 @@ export class CoreRuntime {
       ? this.evaluateProposal(result.proposal, true)
       : undefined;
 
+    // A consented Journey update is not acknowledged until its durable write
+    // succeeds. This keeps the consent event and shared state aligned with the
+    // restart-visible result.
+    if (decision?.outcome === "EXECUTE" && result.proposal.kind === "ADD_TRIP_STOP") {
+      this.persistJourneyForProposal(result.proposal);
+    }
+
     this.emit({
       type: "proposal.consent.recorded",
       sessionId: this.sessionId,
@@ -635,6 +654,20 @@ export class CoreRuntime {
     for (const prior of deferred) {
       const proposal = { ...prior, status: "proposed" as const };
       const decision = this.evaluateProposal(proposal, prior.consentGranted === true);
+      if (decision.outcome === "EXECUTE" && proposal.kind === "ADD_TRIP_STOP") {
+        try {
+          this.persistJourneyForProposal(proposal);
+        } catch {
+          this.changeProposalStatus(
+            proposal.proposalId,
+            "deferred",
+            "JOURNEY_PERSISTENCE_FAILED",
+            traceId,
+            commandId,
+          );
+          continue;
+        }
+      }
       this.emit({
         type: "proposal.policy.decided",
         sessionId: this.sessionId,
@@ -670,13 +703,14 @@ export class CoreRuntime {
     traceId: string,
     commandId: string | null,
   ): void {
+    const stop = journeyStopFromProposal(proposal, this.now());
     this.emit({
       type: "journey.stop.added",
       sessionId: this.sessionId,
       traceId,
       commandId,
       occurredAt: this.now(),
-      payload: { stop: journeyStopFromProposal(proposal, this.now()) },
+      payload: { stop },
     });
     this.changeProposalStatus(
       proposal.proposalId,
@@ -685,6 +719,16 @@ export class CoreRuntime {
       traceId,
       commandId,
     );
+  }
+
+  private persistJourneyForProposal(proposal: ActionProposal): void {
+    if (!this.persistJourney) return;
+    const stop = journeyStopFromProposal(proposal, this.now());
+    const journey = {
+      ...this.state.journey,
+      stops: [...this.state.journey.stops.filter((candidate) => candidate.stopId !== stop.stopId), stop],
+    };
+    this.persistJourney(structuredClone(journey));
   }
 
   private changeProposalStatus(

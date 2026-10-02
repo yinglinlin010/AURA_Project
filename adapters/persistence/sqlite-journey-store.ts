@@ -31,7 +31,7 @@ export interface SqliteJourneyStoreOptions {
   now?: () => number;
 }
 
-/** Persists user-authored journey inputs locally; provider responses are intentionally excluded. */
+/** Persists user-authored journey inputs and Place IDs locally; provider response content is intentionally excluded. */
 export class SqliteJourneyStore {
   private readonly database: Database.Database;
   private readonly now: () => number;
