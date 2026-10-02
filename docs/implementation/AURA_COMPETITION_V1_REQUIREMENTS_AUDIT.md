@@ -106,6 +106,22 @@ Per the frozen spec these are deliberately out of scope: real vehicle control, b
 | 13 | Live end-to-end demo, not timed animation | Unverified | No recorded direct live demonstration or reviewer observation. |
 | 14 | Third-party model/API/library/dataset/media sources accurately disclosed | Partial | Mapbox/Qwen and package provenance are documented in places; finish a complete inventory and license/terms lineage for models and every training datum. |
 
+## §§59–60 and Appendix A: local model and scenario-data gates
+
+| Requirement | Status | Evidence / remaining work |
+|---|---|---|
+| Domain-adapt a local model for bounded AURA behavior; do not imitate frontier general intelligence | Partial | The current SFT task is deliberately narrow cabin-setting extraction. No SFT student exists. |
+| Keep changing route/weather/POI/vehicle facts in context/tools, not fine-tuned weights | Partial | Mapbox adapter and recommendation scorer are separate from the training labels, but not yet wired into a context/tool flow. |
+| Never make generative safety thresholds the sole source of truth | Implemented in source | Local candidate passes schema validation, Core Runtime, deterministic Action Gate and Consent; confirm this remains true in future integrations. |
+| Scenario dataset records context, utterance, expected intent/urgency, allowed/prohibited actions, structured output, response and fallback | Partial | `ml/aura_distill/data/` currently covers only a narrow English volume/temperature extraction task; broader scenario categories and response/fallback coverage are missing. |
+| Teacher-generated examples follow human-defined rules and are validated | Partial | Strict schema and exact seed-label check are present; all source rows remain pending, and no teacher call has been run. |
+| Human review before training | Pending | The single queue `ml/aura_distill/data/review_queue.jsonl` contains 24 assistant-authored pending seeds. No person has approved/rejected them yet; do not invoke automated approval. |
+| Benchmark before fine-tuning | Not implemented | No frozen held-out benchmark, baseline comparison or benchmark report exists; do not train until human-reviewed splits and the benchmark gate are ready. |
+| Evaluate accuracy, structure, unsafe/prohibited output, interruption/stop, offline tasks, tool selection, escalation and latency | Not implemented | Harness source exists for a narrow schema extraction evaluation, but no comprehensive dataset, evaluation run or measured result exists. |
+| Quantize/deploy only after same-benchmark evaluation and actual AI Box hardware test | Not implemented | No trained adapter, conversion/quantization run, target hardware, or deployment evaluation exists. |
+
+Multiple teachers may generate separate drafts into the same queue, and a later SFT run can consume one human-approved consolidated dataset. This does not mean multiple models jointly optimize one student's weights. No teacher/student training has run.
+
 ## §64 Frozen HMI authority
 
 Section 64 and its five approved visual references remain authoritative. No layout redesign is authorized by this audit. `apps/web-simulator/src/App.tsx` and `App.css` provide five role previews plus an external developer console. Source presence alone does not verify visual fidelity: a reference-by-reference rendered comparison is still required, and must preserve the five-display hierarchy, tactile slate system, AURA presence, cognitive-load presentation, journey handoff and data-integrity rules in §§64.1–64.8.
@@ -136,6 +152,6 @@ Section 64 and its five approved visual references remain authoritative. No layo
 2. Wire Phase 8 provider calls through an existing server-side contract and connect recommendation presentation without changing Section 64; keep Search Box temporary-use data out of persistence.
 3. Implement and connect the missing resilience path (Phase 10) and a safe simulated camera/perception path (Phase 9) using existing contracts; label every simulated signal.
 4. Complete all five display connections and shared presence/visual data-integrity behavior under Section 64.
-5. Perform the full M1–M6 scenario and reliability evidence run, plus the required test/build/evaluation work when authorized by the active developer workflow; record exact hardware/provider/model facts.
+5. Perform the full M1–M6 scenario and reliability evidence run, plus the required test/build/evaluation work after it is explicitly requested; record exact hardware/provider/model facts.
 6. Inventory and disclose all third-party software, model, dataset and media sources and their applicable terms.
 7. Re-audit every row, reconcile implementation and docs, then commit and push the intended tree to `codex/aura-v1-integration`.
