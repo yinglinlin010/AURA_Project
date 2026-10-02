@@ -7,6 +7,7 @@ import {
 import { StructuredTraceSink, type TraceSink } from "../../packages/core-runtime/src/tracing.js";
 import type { ProposalSource } from "../../packages/core-runtime/src/intelligence-router.js";
 import type { VoiceProvider, VoiceProviderEvent } from "../../packages/core-runtime/src/voice-runtime.js";
+import { DEFAULT_BRAND } from "../../packages/core-domain/src/brand.js";
 
 export type GeminiVoiceEvent = VoiceProviderEvent;
 
@@ -18,6 +19,7 @@ export interface GeminiVoiceAdapterOptions {
   trace?: TraceSink;
   now?: () => number;
   proposalTimeoutMs?: number;
+  assistantName?: string;
 }
 
 interface PendingProposal {
@@ -32,7 +34,7 @@ interface PendingProposal {
 const proposalFunction = {
   name: "submit_action_proposal",
   description:
-    "Return a constrained AURA action proposal for review by the local policy and consent gates. This does not execute the action.",
+    "Return a constrained action proposal for review by the local policy and consent gates. This does not execute the action.",
   parametersJsonSchema: {
     type: "object",
     required: ["kind", "summary", "targetRole", "priority", "requiresConsent", "payload"],
@@ -65,14 +67,16 @@ const proposalFunction = {
   },
 } as const;
 
-const systemInstruction = [
-  "You are the AURA in-cabin voice assistant.",
+function systemInstructionFor(assistantName: string): string {
+  return [
+  `You are the ${assistantName} in-cabin voice assistant.`,
   "Never call vehicle actuators, execute code, or claim an action has already happened.",
   "When a concrete action is requested, call submit_action_proposal with only the declared fields.",
-  "AURA's local policy and consent manager decides whether it may be routed, deferred, rejected, or executed.",
-  "For safety-critical signals, defer to AURA's deterministic local Safety Supervisor.",
+  "The local policy and consent manager decides whether a proposal may be routed, deferred, rejected, or executed.",
+  "For safety-critical signals, defer to the deterministic local Safety Supervisor.",
   "Speak concise responses appropriate for a moving vehicle.",
-].join(" ");
+  ].join(" ");
+}
 
 export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
   readonly model: string;
@@ -84,6 +88,7 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
   private readonly trace: TraceSink;
   private readonly now: () => number;
   private readonly proposalTimeoutMs: number;
+  private readonly assistantName: string;
   private readonly listeners = new Set<(event: GeminiVoiceEvent) => void>();
   private session: Awaited<ReturnType<GoogleGenAI["live"]["connect"]>> | undefined;
   private connectPromise: Promise<void> | undefined;
@@ -101,6 +106,7 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
     this.trace = options.trace ?? new StructuredTraceSink();
     this.now = options.now ?? Date.now;
     this.proposalTimeoutMs = options.proposalTimeoutMs ?? 30_000;
+    this.assistantName = options.assistantName?.trim() || DEFAULT_BRAND.assistantName;
   }
 
   get connected(): boolean {
@@ -150,7 +156,7 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
       responseModalities: [Modality.AUDIO],
       inputAudioTranscription: {},
       outputAudioTranscription: {},
-      systemInstruction,
+      systemInstruction: systemInstructionFor(this.assistantName),
       tools: [{ functionDeclarations: [proposalFunction] }],
       ...(this.voiceName
         ? {
@@ -439,7 +445,7 @@ export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
   }
 }
 
-/** Public integration name for AURA's bidirectional Gemini Live PCM adapter. */
+/** Public integration name for the bidirectional Gemini Live PCM adapter. */
 export class GeminiVoiceStreamingAdapter extends GeminiLiveVoiceAdapter {}
 
 function sanitizeReason(value: string): string {

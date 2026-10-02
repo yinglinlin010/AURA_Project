@@ -1,8 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import passengerReference from '../../../AURA_UI_UX_Handoff/images/03_passenger_display_final.jpg';
 import windowReference from '../../../AURA_UI_UX_Handoff/images/05_interactive_window_final.jpg';
+import { resolveBrand } from '../../../packages/core-domain/src/brand';
 import { DISPLAY_REGISTRATIONS, useAuraCommand, type DiscoveryState, type GatewayState, type JourneyRecommendationState, type RecommendationProposal, type SharedProposal, type SharedSafetyWarning, type SharedStop, type TransientPlace } from './core/useAuraCommand';
 import './App.css';
+
+const BRAND = resolveBrand({
+  productName: import.meta.env.VITE_AURA_PRODUCT_NAME,
+  assistantName: import.meta.env.VITE_AURA_ASSISTANT_NAME,
+  wakeWord: import.meta.env.VITE_AURA_WAKE_WORD,
+});
 
 type IconName = 'play' | 'pause' | 'back' | 'next' | 'phone' | 'seat' | 'display' | 'settings' | 'pin' | 'route' | 'sun' | 'cloud' | 'mic' | 'check' | 'close' | 'signal';
 
@@ -79,7 +86,7 @@ function recommendationAbstention(reasonCode: string) {
     WHOLE_JOURNEY_EVIDENCE_SOURCE_FAILED: 'The journey evidence source failed. No recommendation was generated.',
     WHOLE_JOURNEY_EVIDENCE_UNAVAILABLE: 'The journey evidence source returned no trip data. No recommendation was generated.',
     WHOLE_JOURNEY_CONTEXT_INCOMPLETE_OR_STALE: 'Fresh origin, destination, and current-route evidence is required. The available trip context was incomplete or stale.',
-    NO_CANDIDATE_WITH_FRESH_ROUTE_DETOUR_EVIDENCE: 'No candidate had fresh route detour evidence, so AURA could not substantiate a recommendation.',
+    NO_CANDIDATE_WITH_FRESH_ROUTE_DETOUR_EVIDENCE: `No candidate had fresh route detour evidence, so ${BRAND.assistantName} could not substantiate a recommendation.`,
     NO_FRESH_DECISION_EVIDENCE: 'No fresh decision evidence was available. No recommendation was generated.',
     NO_FRESH_ROUTE_DETOUR_EVIDENCE: 'A fresh route detour could not be verified. No recommendation was generated.',
     NO_SUBSTANTIATED_RECOMMENDATION: 'The available evidence did not substantiate a journey recommendation.',
@@ -325,12 +332,12 @@ function App() {
         : voice.status;
 
   return <main className="simulator-shell">
-    <header className="simulator-header"><div className="brand-lockup"><span className="aura-mark">A</span><div><strong>AURA</strong><span>Multi-display simulator</span></div></div><div className="session-status"><span className="simulation-tag">Illustrative simulation</span><span className={`presence-indicator ${voice.status === 'LISTENING' ? 'listening' : ''}`}/><span>AURA&nbsp; {voiceLabel}</span><button className="listen-button" onClick={() => { if (voiceActive) stopVoice(); else void startVoice(); }} aria-pressed={voiceActive}><Icon name="mic" size={16}/>{voiceActive ? 'Stop listening' : voice.status === 'ERROR' ? 'Try voice again' : 'Listen'}</button></div></header>
+    <header className="simulator-header"><div className="brand-lockup"><span className="aura-mark">{BRAND.productName.slice(0, 1).toUpperCase()}</span><div><strong>{BRAND.productName}</strong><span>Multi-display simulator</span></div></div><div className="session-status"><span className="simulation-tag">Illustrative simulation</span><span className={`presence-indicator ${voice.status === 'LISTENING' ? 'listening' : ''}`}/><span>{BRAND.assistantName}&nbsp; {voiceLabel}</span><button className="listen-button" onClick={() => { if (voiceActive) stopVoice(); else void startVoice(); }} aria-pressed={voiceActive}><Icon name="mic" size={16}/>{voiceActive ? 'Stop listening' : voice.status === 'ERROR' ? 'Try voice again' : 'Listen'}</button></div></header>
     {(voice.error || voice.inputTranscript || voice.outputTranscript || voice.status !== 'IDLE') && <div className={`voice-feedback ${voice.error ? 'voice-error' : ''}`} aria-live="polite">
       {voice.error && <span>{voice.error}</span>}
       {!voice.error && voice.status !== 'IDLE' && <span>Voice: {voiceLabel}</span>}
       {voice.inputTranscript && <span><b>You:</b> {voice.inputTranscript}</span>}
-      {voice.outputTranscript && <span><b>AURA:</b> {voice.outputTranscript}</span>}
+      {voice.outputTranscript && <span><b>{BRAND.assistantName}:</b> {voice.outputTranscript}</span>}
     </div>}
     <div className="vehicle-layout">
       <div className="driver-zone"><div className="screen-heading"><h1>Driver display</h1><span>8:3 instrument cluster · Gateway {clusterConnection.status}</span></div><Cluster speedKph={gateway.speedKph} warning={gateway.activeSafetyWarning}/><div className="screen-heading center-heading"><h1>Journey &amp; control</h1><span>16:9 center display · Gateway {centerConnection.status}</span></div><CenterDisplay proposals={gateway.proposals} journeyStops={gateway.journeyStops} connection={centerConnection} load={gateway.load} warning={gateway.activeSafetyWarning} recommendation={recommendation} onRecommendationRequest={requestJourneyRecommendation} onRecommendationSubmit={(proposal) => { submitJourneyRecommendation(proposal); }} onConsent={(proposalId, decision) => sendCommand('center-main', { type: 'action.consent', payload: { proposalId, decision } })}/></div>

@@ -10,6 +10,7 @@ import { createIntelligenceStack } from "./intelligence.js";
 import { createExternalAdapterStack, hasWeatherConfiguration } from "./external-adapters.js";
 import { SqliteJourneyStore } from "../../../adapters/persistence/sqlite-journey-store.js";
 import { ACTIVE_JOURNEY_ID, persistJourney, restoreJourney } from "./journey-persistence.js";
+import { brandFromEnvironment } from "../../../packages/core-domain/src/brand.js";
 
 function loadRegistry(): DisplayRegistry {
   const configPath = process.env.AURA_DISPLAY_REGISTRY ??
@@ -20,6 +21,7 @@ function loadRegistry(): DisplayRegistry {
 }
 
 async function main(): Promise<void> {
+  const brand = brandFromEnvironment(process.env);
   const registry = loadRegistry();
   const journeys = new SqliteJourneyStore();
   const runtime = new CoreRuntime({
@@ -51,7 +53,7 @@ async function main(): Promise<void> {
     ...(externalAdapters === undefined ? {} : { places: externalAdapters.places, routing: externalAdapters.routing }),
   });
   await gateway.start();
-  process.stdout.write(`AURA Core HMI Gateway listening at ${gateway.address()}\n`);
+  process.stdout.write(`${brand.productName} Core HMI Gateway listening at ${gateway.address()}\n`);
 
   const shutdown = async () => {
     try {

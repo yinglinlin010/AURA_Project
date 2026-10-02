@@ -13,6 +13,7 @@ import {
   type TraceSink,
 } from "../../../packages/core-runtime/src/index.js";
 import type { CoreRuntime } from "../../../packages/core-runtime/src/core-runtime.js";
+import { brandFromEnvironment } from "../../../packages/core-domain/src/brand.js";
 
 export interface IntelligenceStack {
   router: IntelligenceRouter;
@@ -33,11 +34,12 @@ export function createIntelligenceStack(
 ): IntelligenceStack {
   const trace = options.trace ?? new StructuredTraceSink();
   const requestedByRole = options.requestedByRole ?? "center";
+  const brand = brandFromEnvironment(process.env);
   const useMock = process.env.AURA_VOICE_MODE === "mock" ||
     (process.env.AURA_VOICE_MODE !== "live" && !process.env.GEMINI_API_KEY);
   const gemini: ProposalSource & VoiceProvider = useMock
     ? new MockGeminiVoiceStreamingAdapter()
-    : new GeminiVoiceStreamingAdapter({ sessionId: runtime.sessionId, trace });
+    : new GeminiVoiceStreamingAdapter({ sessionId: runtime.sessionId, trace, assistantName: brand.assistantName });
   let voice: VoiceRuntime;
   const cloud: ProposalSource = {
     async proposeFromText(input) {
