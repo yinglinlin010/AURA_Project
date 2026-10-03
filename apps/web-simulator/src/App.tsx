@@ -5,6 +5,9 @@ import { resolveBrand } from '../../../packages/core-domain/src/brand';
 import { resolvePresentation } from '../../../packages/core-domain/src/presentation-resolver';
 import type { PresenceSnapshot } from '../../../contracts/protocol/src/types';
 import { DISPLAY_REGISTRATIONS, useAuraCommand, type DiscoveryState, type GatewayState, type JourneyRecommendationState, type RecommendationProposal, type SharedProposal, type SharedSafetyWarning, type SharedStop, type TransientPlace } from './core/useAuraCommand';
+import { CenterTaskPanel } from './CenterTaskPanel';
+import { AssistanceTimingPanel } from './AssistanceTimingPanel';
+import type { ActiveTask, TaskLifecycleCommand } from '../../../contracts/protocol/src/types';
 import './App.css';
 
 const BRAND = resolveBrand({
@@ -148,7 +151,7 @@ function RecommendationResult({ recommendation, proposals, onSubmit }: { recomme
   </div>;
 }
 
-function CenterDisplay({ proposals, journeyStops, connection, warning, presentation, recommendation, onConsent, onRecommendationRequest, onRecommendationSubmit }: { proposals: SharedProposal[]; journeyStops: SharedStop[]; connection: { status: string; lastMessage: string }; warning: SharedSafetyWarning | null; presentation: ReturnType<typeof resolvePresentation>; recommendation: JourneyRecommendationState; onConsent: (proposalId: string, decision: 'approve' | 'decline') => void; onRecommendationRequest: (text: string) => boolean; onRecommendationSubmit: (proposal: RecommendationProposal) => void }) {
+function CenterDisplay({ proposals, journeyStops, connection, warning, presentation, recommendation, tasks, taskReceipt, onTaskCommand, onConsent, onRecommendationRequest, onRecommendationSubmit }: { proposals: SharedProposal[]; journeyStops: SharedStop[]; connection: { status: string; lastMessage: string }; warning: SharedSafetyWarning | null; presentation: ReturnType<typeof resolvePresentation>; recommendation: JourneyRecommendationState; tasks: ActiveTask[]; taskReceipt: { commandId: string; status: string; reasonCode?: string } | null; onTaskCommand: (command: TaskLifecycleCommand) => boolean; onConsent: (proposalId: string, decision: 'approve' | 'decline') => void; onRecommendationRequest: (text: string) => boolean; onRecommendationSubmit: (proposal: RecommendationProposal) => void }) {
   const stopProposals = proposals.filter((item) => item.kind === 'ADD_TRIP_STOP' && item.targetRole === 'center');
   const guidanceProposals = proposals.filter((item) => item.kind === 'SHOW_GUIDANCE' && item.targetRole === 'center');
   const routePreviewProposals = proposals.filter((item) => item.kind === 'SHOW_INFORMATION' && item.targetRole === 'center' && item.payload?.discoveryMode === 'route_preview');
@@ -156,6 +159,7 @@ function CenterDisplay({ proposals, journeyStops, connection, warning, presentat
   const hasDeferredProposal = centerProposals.some((item) => item.status === 'deferred');
   const proposalDetailsVisible = presentation.load !== undefined && !presentation.deferNonCritical && !presentation.suppressNonSafetyContent;
   const [recommendationText, setRecommendationText] = useState('');
+  const [dropoffClarificationNeeded, setDropoffClarificationNeeded] = useState(false);
   const recommendationUnavailable = presentation.load === undefined || presentation.deferNonCritical || presentation.suppressNonSafetyContent;
   const submittedProposal = recommendation.status === 'submitted' ? proposals.find((item) => item.proposalId === recommendation.proposal.proposalId) : undefined;
   const recommendationBusy = recommendation.status === 'pending' || (recommendation.status === 'submitted' && (!submittedProposal || !['completed', 'declined', 'rejected', 'cancelled', 'interrupted'].includes(submittedProposal.status)));
@@ -177,10 +181,11 @@ function CenterDisplay({ proposals, journeyStops, connection, warning, presentat
       <div className="route-summary"><div><Icon name="route"/><b>98 km</b><span>to destination</span></div><div><Icon name="settings"/><b>64 min</b><span>ETA 19:32</span></div><div><Icon name="next"/><b>Currently</b><span>on A–8</span></div><small className="route-source-label">SIMULATED ROUTE VALUES</small></div>
       <div className="map-wrap"><RouteMap /><span className="map-source-label">SIMULATED ROUTE</span><span className="map-label munich-label">MUNICH</span><span className="map-label stuttgart-label">STUTTGART</span><span className="road-label">A–8</span>
         <div className="recommendation-tools">
-          {!recommendationUnavailable && <form className="recommendation-form" onSubmit={(event) => { event.preventDefault(); if (onRecommendationRequest(recommendationText)) setRecommendationText(''); }}>
+          {!recommendationUnavailable && <form className="recommendation-form" onSubmit={(event) => { event.preventDefault(); if (/\b(?:mom|mother)\b|媽媽/i.test(recommendationText) && /\b(?:get out|drop[- ]?off)\b|下車|下车/i.test(recommendationText) && /\b(?:charg(?:ing|er))\b|充電|充电/i.test(recommendationText)) { setDropoffClarificationNeeded(true); return; } if (onRecommendationRequest(recommendationText)) { setRecommendationText(''); setDropoffClarificationNeeded(false); } }}>
             <label className="sr-only" htmlFor="journey-recommendation-request">Ask for a whole-journey recommendation</label>
             <input id="journey-recommendation-request" value={recommendationText} maxLength={1000} disabled={recommendationBusy} onChange={(event) => setRecommendationText(event.target.value)} placeholder="Ask about this journey… e.g. a quick dinner stop" />
             <button type="submit" disabled={recommendationBusy || !recommendationText.trim()}>Recommend</button>
+            {dropoffClarificationNeeded && <div className="recommendation-message" role="group" aria-label="Passenger drop-off preference"><span>Does proximity to an entrance or passenger drop-off space matter?</span><button type="button" onClick={() => { if (onRecommendationRequest(`${recommendationText} entrance proximity matters`)) { setRecommendationText(''); setDropoffClarificationNeeded(false); } }}>Yes, it matters</button><button type="button" onClick={() => { if (onRecommendationRequest(`${recommendationText} entrance proximity not important`)) { setRecommendationText(''); setDropoffClarificationNeeded(false); } }}>No, no special preference</button></div>}
           </form>}
           {presentation.load === undefined && !presentation.suppressNonSafetyContent && <span className="recommendation-paused" role="status">Waiting for a current driver-load state before showing journey suggestions.</span>}
           {presentation.deferNonCritical && !presentation.suppressNonSafetyContent && <span className="recommendation-paused" role="status">Paused while driver attention is needed.</span>}
@@ -193,6 +198,7 @@ function CenterDisplay({ proposals, journeyStops, connection, warning, presentat
       {proposalDetailsVisible && guidanceProposals.filter((item) => item.status === 'executing' || item.status === 'completed' || item.status === 'declined').map((item) => <div className="proposal-panel guidance-result" key={item.proposalId}><div><span className="proposal-kicker">SIMULATED parking assistance</span><b>{proposalStateLabel(item)}</b><span>Source: simulator · no vehicle control</span></div></div>)}
       {presentation.centerHighLoadMarkerEligible && hasDeferredProposal && <span className="deferred-proposal-indicator" aria-label="Journey recommendation details are waiting until driver load is lower" title="Journey recommendation details are waiting until driver load is lower" />}
       {connection.status !== 'connected' && <div className="gateway-display-error">Center gateway {connection.status}: {connection.lastMessage}</div>}
+      <CenterTaskPanel tasks={tasks} connected={connection.status === 'connected'} available={proposalDetailsVisible && !warning} receipt={taskReceipt} send={onTaskCommand}/>
       <div className="center-actions"><button><b>Navigate</b><span>Route options</span></button><button><b>Radio</b><span>FM 98.4</span></button><button><b>Climate</b><span>22°C Auto</span></button><button><b>Phone</b><span>Connected</span></button></div>
     </div>
   </section>;
@@ -334,7 +340,7 @@ function ControlConsole({ speedKph, load, connectivity, connections, status, las
 }
 
 function App() {
-  const { state: gateway, sendCommand, voice, startVoice, stopVoice, discovery, searchPlaces, previewRoute, recommendation, requestJourneyRecommendation, submitJourneyRecommendation } = useAuraCommand();
+  const { state: gateway, sendCommand, sendTaskCommand, taskReceipt, voice, startVoice, stopVoice, discovery, searchPlaces, previewRoute, recommendation, requestJourneyRecommendation, submitJourneyRecommendation } = useAuraCommand();
   const centerConnection = gateway.connections['center-main'];
   const passengerConnection = gateway.connections['front-passenger-main'];
   const clusterConnection = gateway.connections['cluster-main'];
@@ -354,7 +360,7 @@ function App() {
       {voice.outputTranscript && <span><b>{BRAND.assistantName}:</b> {voice.outputTranscript}</span>}
     </div>}
     <div className="vehicle-layout">
-      <div className="driver-zone"><ScreenHeading title="Driver display" details="Cluster" gatewayStatus={clusterConnection.status} presence={gateway.presence}/><Cluster speedKph={gateway.speedKph} warning={gateway.activeSafetyWarning} presentation={clusterPresentation}/><ScreenHeading title="Journey & control" details="Center" gatewayStatus={centerConnection.status} presence={gateway.presence}/><CenterDisplay proposals={gateway.proposals} journeyStops={gateway.journeyStops} connection={centerConnection} warning={gateway.activeSafetyWarning} presentation={centerPresentation} recommendation={recommendation} onRecommendationRequest={requestJourneyRecommendation} onRecommendationSubmit={(proposal) => { submitJourneyRecommendation(proposal); }} onConsent={(proposalId, decision) => sendCommand('center-main', { type: 'action.consent', payload: { proposalId, decision } })}/></div>
+      <div className="driver-zone"><ScreenHeading title="Driver display" details="Cluster" gatewayStatus={clusterConnection.status} presence={gateway.presence}/><Cluster speedKph={gateway.speedKph} warning={gateway.activeSafetyWarning} presentation={clusterPresentation}/><ScreenHeading title="Journey & control" details="Center" gatewayStatus={centerConnection.status} presence={gateway.presence}/><CenterDisplay proposals={gateway.proposals} journeyStops={gateway.journeyStops} connection={centerConnection} warning={gateway.activeSafetyWarning} presentation={centerPresentation} recommendation={recommendation} tasks={gateway.activeTasks} taskReceipt={taskReceipt} onTaskCommand={sendTaskCommand} onRecommendationRequest={requestJourneyRecommendation} onRecommendationSubmit={(proposal) => { submitJourneyRecommendation(proposal); }} onConsent={(proposalId, decision) => sendCommand('center-main', { type: 'action.consent', payload: { proposalId, decision } })}/></div>
       <div className="passenger-zone"><ScreenHeading title="Passenger discovery" details="Front passenger" gatewayStatus={passengerConnection.status} presence={gateway.presence}/><PassengerDisplay discovery={discovery} searchPlaces={searchPlaces} previewRoute={previewRoute} proposal={passengerProposal} connection={passengerConnection} onProposal={(place, route, originLabel) => {
         const pathSummary = `${(route.distanceMeters / 1000).toFixed(1)} km · ${(route.durationSeconds / 60).toFixed(0)} min`;
         const payload = discovery.route;
@@ -377,6 +383,7 @@ function App() {
       <div className="window-zone"><ScreenHeading title="Ambient window" details="Window" gatewayStatus={windowConnection.status} presence={gateway.presence} windowExamples/><WindowDisplay/></div>
     </div>
     <ControlConsole speedKph={gateway.speedKph} load={gateway.load} connectivity={gateway.connectivity} connections={gateway.connections} status={centerConnection.status} lastMessage={centerConnection.lastMessage} onSpeed={(speed) => sendCommand('center-main', { type: 'vehicle.telemetry.report', payload: { vehicle: { speedKph: speed } } })} onLoad={(level) => sendCommand('center-main', { type: 'driver.cognitive_load.report', payload: { level, timestamp: Date.now(), confidence: 1 } })} onConnectivity={setConnectivity}/>
+    <AssistanceTimingPanel />
     <footer className="simulator-footer"><span>Scenario&nbsp; <b>Munich → Stuttgart</b></span><span>Illustrative route values · shared vehicle telemetry updates when the gateway is connected</span></footer>
   </main>;
 }

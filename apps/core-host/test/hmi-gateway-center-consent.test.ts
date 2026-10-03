@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import WebSocket from "ws";
 import type { ActionProposalRequest, DisplayRegistration, DisplayRegistry } from "../../../contracts/protocol/src/types.js";
+import { SqliteTaskStore } from "../../../adapters/persistence/sqlite-task-store.js";
 import { CoreRuntime } from "../../../packages/core-runtime/src/core-runtime.js";
 import { HmiGateway } from "../src/hmi-gateway.js";
 
@@ -119,6 +123,74 @@ test("Gateway consent uses registered Center role for Journey mutations", async 
     const client = clients.find((item) => item.registration.role === role);
     assert.ok(client, `missing registered ${role} client`);
     return client;
+  }
+});
+
+test("only Center consent starts a task through Gateway and task state survives host-style restore", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "aura-gateway-task-"));
+  const databasePath = join(directory, "tasks.sqlite");
+  const store = new SqliteTaskStore({ databasePath });
+  const runtime = new CoreRuntime({
+    registry,
+    initialTasks: store.get(),
+    persistTasks: (tasks) => store.save(tasks),
+  });
+  runtime.ingestSignal({
+    signalId: "task-consent-driver-load",
+    type: "driver.cognitive_load",
+    value: { level: "normal", confidence: 1 },
+    source: "simulated",
+    timestamp: Date.now(),
+    confidence: 1,
+  }, "task-consent-driver-load-trace");
+  const gateway = new HmiGateway({ runtime, registry, host: "127.0.0.1", port: 0 });
+  const clients: TestClient[] = [];
+  await gateway.start();
+  try {
+    const address = gateway.address();
+    assert.ok(address);
+    for (const registration of registrations) clients.push(await connectRegistered(address, registration));
+    const center = clients.find((client) => client.registration.role === "center");
+    const passenger = clients.find((client) => client.registration.role === "front_passenger");
+    const cluster = clients.find((client) => client.registration.role === "cluster");
+    assert.ok(center && passenger && cluster);
+
+    const request = proposal("center-task-start", "SHOW_INFORMATION", { message: "Show the selected option." });
+    runtime.proposeAction(request, "front_passenger", "trace-task-start");
+
+    const denied = submitConsent(passenger, runtime.sessionId, "passenger-task-approve", request.proposalId, "approve");
+    const deniedReceipt = (await denied).receipt as Record<string, unknown>;
+    assert.equal(deniedReceipt.status, "REJECTED");
+    assert.equal(deniedReceipt.reasonCode, "CONSENT_ROLE_MISMATCH");
+    assert.equal(runtime.getState().activeTasks.length, 0);
+
+    const centerEvent = waitForMessage(center.socket, (message) =>
+      message.kind === "event" && (message.event as Record<string, unknown> | undefined)?.type === "task.registered");
+    const publicEvent = waitForMessage(cluster.socket, (message) =>
+      message.kind === "event" && (message.event as Record<string, unknown> | undefined)?.type === "task.registered");
+    const approved = submitConsent(center, runtime.sessionId, "center-task-approve", request.proposalId, "approve");
+    const approvedReceipt = (await approved).receipt as Record<string, unknown>;
+    assert.equal(approvedReceipt.status, "RECEIVED");
+    const [centerMessage, clusterMessage] = await Promise.all([centerEvent, publicEvent]);
+    const privateTask = ((centerMessage.event as Record<string, unknown>).payload as { task: Record<string, unknown> }).task;
+    const publicTask = ((clusterMessage.event as Record<string, unknown>).payload as { task: Record<string, unknown> }).task;
+    assert.equal(privateTask.taskId, `action:${request.proposalId}`);
+    assert.equal(privateTask.status, "running");
+    assert.deepEqual(Object.keys(publicTask).sort(), ["priority", "startedAt", "status", "taskId", "traceId", "version"]);
+    assert.equal(store.get()[0]?.taskId, privateTask.taskId);
+    assert.equal(store.get()[0]?.status, "running");
+
+    // The same SQLite store is what Core Host passes back on process startup.
+    const restored = new CoreRuntime({ registry, initialTasks: store.get(), persistTasks: (tasks) => store.save(tasks) });
+    assert.equal(restored.getState().activeTasks[0]?.status, "interrupted");
+    assert.equal(restored.getState().activeTasks[0]?.pauseReason, "HOST_RESTART_RECOVERY_REQUIRED");
+    assert.equal(restored.resumeTask instanceof Function, true);
+    assert.throws(() => restored.resumeTask({ taskId: privateTask.taskId as string, traceId: "resume-without-evidence" }), /TASK_RECOVERY_REVALIDATION_REQUIRED/);
+  } finally {
+    await Promise.all(clients.map((client) => closeSocket(client.socket)));
+    await gateway.close();
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 

@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { default as Ajv } from "ajv";
 import type { AuraSharedState, JourneyRecommendationMessage, SignalFreshness, SignalSource } from "../../../contracts/protocol/src/types.js";
 import type { JourneyEvidence, JourneyOption, JourneyRecommendationEvidenceSource, WholeJourneyEvidence } from "../src/journey-recommender.js";
-import { recommendWholeJourney } from "../src/journey-recommender.js";
+import { recommendWholeJourney, scoreJourneyOptions } from "../src/journey-recommender.js";
+import { SimulatedJourneyRecommendationEvidenceSource } from "../src/journey-recommendation-fixture.js";
 
 const state = {} as AuraSharedState;
 const message: JourneyRecommendationMessage = {
@@ -81,6 +82,51 @@ test("fresh whole-journey evidence returns a Center consent proposal with a conc
   ajv.addSchema(schema);
   const validate = ajv.compile({ $ref: "https://aura.local/schemas/protocol.schema.json#/definitions/journeyRecommendationResultsMessage" });
   assert.equal(validate(result), true, JSON.stringify(validate.errors));
+});
+
+test("drop-off and charging request receives explicitly simulated evidence and ranks access facts", async () => {
+  const now = 10_000;
+  const fixture = new SimulatedJourneyRecommendationEvidenceSource();
+  const evidenceSet = await fixture.getEvidence({ requestText: "找一個方便媽媽下車、附近有充電的地方", state, now });
+  assert.ok(evidenceSet);
+  assert.equal(evidenceSet?.options.length, 2);
+  for (const option of evidenceSet?.options ?? []) {
+    assert.equal(option.passengerDropoff?.source, "simulated");
+    assert.equal(option.nearbyCharging?.source, "simulated");
+  }
+  const recommendation = scoreJourneyOptions(evidenceSet!.options, now, { prioritizePassengerDropoff: true });
+  assert.ok(recommendation.selected);
+  assert.equal(recommendation.simulated, true);
+  assert.ok(recommendation.rationale.some((line) => line.includes("Passenger drop-off")));
+  assert.ok(recommendation.rationale.some((line) => line.includes("Nearby charging")));
+});
+
+test("drop-off distance affects ranking only after the user confirms it matters", async () => {
+  const now = 10_000;
+  const evidenceSet = wholeJourney(now);
+  for (const option of evidenceSet.options) {
+    option.poiQuality = evidence(4, now);
+    option.detourMinutes = evidence(10, now);
+    option.passengerDropoff = evidence({ access: "curbside", distanceToEntranceMeters: option.placeId === "harbor-table" ? 5 : 400 }, now);
+    option.nearbyCharging = evidence([], now);
+  }
+  const request = async (requestText: string) => recommendWholeJourney({
+    message: { ...message, requestText }, state, now,
+    source: source(async () => structuredClone(evidenceSet)),
+  });
+  const unspecified = await request("Find a dinner restaurant");
+  const preferred = await request("Find a dinner restaurant; entrance proximity matters");
+  const declined = await request("Find a dinner restaurant; entrance proximity not important");
+
+  assert.equal(unspecified.status, "proposal");
+  assert.equal(preferred.status, "proposal");
+  assert.equal(declined.status, "proposal");
+  if (unspecified.status === "proposal" && preferred.status === "proposal" && declined.status === "proposal") {
+    assert.ok(!unspecified.recommendation.rationale.some((line) => line.startsWith("Passenger drop-off:")));
+    assert.ok(preferred.recommendation.rationale.some((line) => line.startsWith("Passenger drop-off:")));
+    assert.ok(!declined.recommendation.rationale.some((line) => line.startsWith("Passenger drop-off:")));
+    assert.equal(preferred.centerProposal.payload.placeId, "harbor-table");
+  }
 });
 
 test("missing evidence abstains", async () => {

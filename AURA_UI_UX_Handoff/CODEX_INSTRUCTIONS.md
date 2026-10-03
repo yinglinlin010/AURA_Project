@@ -3,6 +3,8 @@
 **Attention Codex / UI Implementing Agents:**
 The consolidated, written Competition V1 HMI specification is in Section 64 of `../docs/product/AURA_MASTER_SPEC_2026-10-02.md`. This folder preserves the five final image assets and supporting handoff material. Section 61.29 establishes the authority boundary; Section 64 contains the complete written UI/HMI rules.
 
+Before implementation, also read Master Spec §61.31 for the product direction confirmed on 2026-10-04. It updates the product's hero scenario and priority capabilities while retaining the established safety, consent, five-role and visual rules. The Cluster and four-display implementation supplements are tracked in [PR #1](https://github.com/yinglinlin010/AURA_Project/pull/1) and are not present in this checkout until merged or otherwise incorporated; follow the applicable current handoff when available.
+
 ## 🔴 CRITICAL PRIORITY RULE 🔴
 **The 5 images inside the `images/` folder are the ABSOLUTE HIGHEST PRIORITY reference for UI implementation.** 
 When generating UI code (CSS, Tailwind, Flutter, Android XML), you MUST strictly follow the layouts, grid proportions, and color logic shown in these specific images. 

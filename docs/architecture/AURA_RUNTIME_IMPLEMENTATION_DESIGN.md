@@ -11,12 +11,12 @@ HMI 視覺來源是使用者指定的 [Antigravity 五螢幕圖與交接規格](
 
 ## 目前落地範圍
 
-- `apps/core-host/src/main.ts` 建立 `CoreRuntime`、載入 display registry，並啟動 `HmiGateway`；Gateway 透過 WebSocket 驗證註冊、command、snapshot 與 event。`apps/web-simulator/src/core/useAuraCommand.ts` 在同一瀏覽器頁面建立兩個註冊連線：`center-main` / `main-computer` 與 `front-passenger-main` / `main-computer`。這兩個 client identity 不等於五個獨立執行的 HMI client。
+- `apps/core-host/src/main.ts` 建立 `CoreRuntime`、載入五角色 display registry，並啟動 `HmiGateway`；Gateway 驗證註冊、command、snapshot 與 event。`apps/web-simulator/src/core/useAuraCommand.ts` 在同一瀏覽器頁面建立五個註冊連線，各自使用 registry 中的 display/device/role identity。這是五個邏輯 socket，不是五個獨立執行的 HMI app 或實體顯示器。
 - `apps/web-simulator/src/App.tsx` 顯示五個 Section 64 角色視覺預覽及獨立的 Developer Control Console。Control Console 透過 Center 連線送出車速與認知負荷報告；共享車速更新 Cluster 預覽。Passenger 可送出以 Center 為目標、需同意的 `ADD_TRIP_STOP` proposal，Center 透過 consent command 批准或拒絕；兩端以 snapshots 和 proposal/status/consent/journey events 顯示共享狀態。`journey.stop.added` 事件更新 Center journey。Rear、Window 及路線/地點內容仍主要是本地或示意呈現，不代表五個畫面都已完成 live state sync。
 - Control Console 可報告車速及 `low`、`normal`、`high`、`critical` 認知負荷；Core 將未觀測負荷表示為 `currentLoad` 缺席，confidence 為獨立 metadata。`packages/core-domain/src/action-gate.ts` 使 secondary proposal 在 high/critical 負荷時延後，負荷回到 normal/low 時重新評估。
 - Scenario Runner（`adapters/simulator/src/cli.ts`、`scenario.ts`）使用相同 `CoreRuntime` signal/command intake，不是視覺 Control Console。
-- Gateway 與 Core Runtime 已由 core host 接通；host 在 `main.ts` 建立 Voice Runtime 與 intelligence stack。Browser Center 使用 `AudioWorklet` 擷取並重採樣為 16 kHz、單聲道 signed 16-bit PCM，透過 `voice.start` / `voice.stop` 與二進位音訊 frame 連接 Gateway；UI 消費 voice status、transcript、error，並播放 Gateway 回傳的 provider PCM。host 預設使用 mock speech adapter，只有環境設定為 live 且提供 Gemini key 時才選 live Gemini adapter；此 browser 路徑不代表車載硬體音訊整合或已驗證延遲/品質。
-- `Gemma2BOfflineSimulator` 只做確定性文字規則匹配，不執行本機模型推論。Places、routing、weather、SQLite journey adapters 有實作，Core Host 在設定 `MAPBOX_ACCESS_TOKEN` 時會建立 stack，但目前沒有 HMI Gateway、journey scorer 或 UI 呼叫 places/routing 方法；不可描述成 end-to-end provider flow。Camera/perception 與 offline/cloud continuity 也不是目前證實已整合的 runtime 能力。
+- Gateway 與 Core Runtime 已由 core host 接通；host 在 `main.ts` 建立 Voice Runtime 與 intelligence stack。Browser Center 使用 `AudioWorklet` 擷取並重採樣為 16 kHz、單聲道 signed 16-bit PCM，透過 `voice.start` / `voice.stop` 與二進位音訊 frame 連接 Gateway；UI 消費 voice status、transcript、error，並播放 Gateway 回傳的 provider PCM。Host 支援 mock、明確設定的 Gemini Live 或 local Whisper 路徑；local Whisper 使用外部 whisper.cpp 與 macOS `say`/`afconvert`，不是跨平台部署證據。Wake-word detection 尚未接線；生成音訊 smoke 和 fake-runner tests 不證明即時麥克風、喇叭播放、車內噪音或延遲表現。
+- `Gemma2BOfflineSimulator` 只做確定性文字規則匹配；Ollama 是獨立、可選的本機 proposal 候選器，不能據此宣稱 AURA 模型已訓練。Connectivity state、online/degraded/offline routing、local fallback、設定式 HTTP health probe 與模擬恢復路徑已存在；這不等於持久化任務恢復或真實 provider/network recovery。Mapbox search/route preview 和 Journey persistence 已由 Gateway/Host 接線，但 live provider 成功及完整 journey ranking 未驗證。Camera capture/perception、既有車輛自動停車能力接線、Android/實體裝置仍未驗證。
 
 ## 1. 設計目標
 
@@ -301,17 +301,17 @@ apps/
 scenarios/               # cognitive-load-deferral、safety-override
 ```
 
-Core host 與 web simulator 已存在。Simulator 保有五個 Section 64 視覺角色，但只有 Center 與 Front Passenger 以兩個 gateway registrations 連線；Cluster 的共享車速及 Center/Passenger 的 proposal-consent-journey 路徑已接到 command/event/state 流程。其餘角色仍非獨立註冊 client，且 Rear/Window state 與多數示意路線/地點資料未整合成即時共享狀態。
+Core host 與 web simulator 已存在。Simulator 保有五個 Section 64 視覺角色，並在同一瀏覽器為五角色各開一個 gateway registration；這不代表五個獨立 HMI 程序或實體設備。Center/Passenger 的 proposal-consent-journey 路徑已接到 command/event/state 流程，Rear/Window 多數內容仍是示意或 local preview state。
 
 ## 10. 實作順序與 review gate
 
 實作進度（此處只記錄 repository 可見的範圍）：
 
 1. **Contracts 與 configuration：** TypeScript contracts、JSON Schema、display registry 已存在；driver load 使用 low/normal/high/critical，未觀測值由 `currentLoad` 缺席表示。
-2. **Core、Event Bus、Gateway：** Core Runtime、event bus 與 WebSocket HMI Gateway 已由 `apps/core-host/src/main.ts` 接通，registry 含五個邏輯角色。Web simulator 在同頁註冊 `center-main` 與 `front-passenger-main` 兩個 client identities。
+2. **Core、Event Bus、Gateway：** Core Runtime、event bus 與 WebSocket HMI Gateway 已由 `apps/core-host/src/main.ts` 接通，registry 含五個邏輯角色。Web simulator 在同頁為五個角色建立各自註冊連線。
 3. **Simulator：** Scenario Runner 可透過相同 Core Runtime 接收 signals/commands；Web simulator Control Console 可經 Gateway 更新車速與認知負荷，Cluster 讀取共享車速。
 4. **Action / consent / safety：** proposal gate、target-role consent、defer/release 及 deterministic safety supervisor 有後端邏輯；Passenger 的 Center-targeted stop proposal、Center approve/decline、共享狀態與 journey-stop 顯示已接線。其他角色的提案/確認 UI 及完整安全事件呈現仍未全數接入。
-5. **Adapters：** voice/intelligence stack 在 host 啟動時建立；places、routing、weather、SQLite journey adapters 雖已實作，外部 adapter stack 尚未由 host 啟動流程連接。
+5. **Adapters：** voice/intelligence stack 在 host 啟動時建立，speech mode 可為 mock、Gemini Live 或明確設定的 local Whisper。Host 可選擇 Mapbox search/routing 及 SQLite Journey adapters；Gateway 有 search/route-preview 路徑。Live provider 成功、end-to-end recommendation ranking 和真實恢復尚未驗證。Weather adapter 雖存在，不能由 adapter 存在推定 UI 已使用。
 
 此文件描述架構與進度，沒有新增或執行測試的記錄。
 
@@ -319,7 +319,7 @@ Core host 與 web simulator 已存在。Simulator 保有五個 Section 64 視覺
 
 這些決策不阻擋架構設計，但應在對應模組落碼前完成：
 
-1. 確認 live Places/routing/weather provider 的啟用條件、授權、錯誤處理與資料 freshness；目前 adapters 尚未接入 core host 啟動流程。
+1. 確認 live Places/routing/weather provider 的授權、資料 freshness、錯誤處理與端到端使用情境；Mapbox search/route-preview 已有接線，但 live success、推薦排序及 weather UI flow 尚未驗證。
 2. 在目標主電腦量測後，確認 local/cloud model 與語音延遲目標；目前 voice/intelligence stack 有 host wiring，但不能據此推定完成車載音訊部署。
 3. 完成 Gateway 裝置登錄／配對與可信網路假設；目前可由 registry 註冊，未見 production pairing/authentication。
 4. 儲存使用者關聯資料前，核定 SQLite journey storage 的保存期限、加密、存取與刪除規則。

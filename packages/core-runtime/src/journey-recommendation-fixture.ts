@@ -19,7 +19,7 @@ const FIXTURE_SOURCE_LABEL = "journey-recommendation-tradeoff fixture";
 export class SimulatedJourneyRecommendationEvidenceSource implements JourneyRecommendationEvidenceSource {
   async getEvidence(input: { requestText: string; state: Readonly<AuraSharedState>; now?: number }): Promise<WholeJourneyEvidence | null> {
     void input.state;
-    if (!isRestaurantRequest(input.requestText)) return null;
+    if (!isRestaurantRequest(input.requestText) && !isDropoffChargingRequest(input.requestText)) return null;
 
     try {
       const fixture = JSON.parse(readFileSync(findFixturePath(), "utf8")) as unknown;
@@ -44,6 +44,10 @@ function isRestaurantRequest(requestText: string): boolean {
   const normalized = requestText.trim();
   if (normalized.length === 0) return false;
   return /\b(?:restaurant|dinner|lunch|meal|food|eatery)\b|餐廳|餐厅|晚餐|午餐|用餐|吃飯|吃饭/i.test(normalized);
+}
+
+function isDropoffChargingRequest(requestText: string): boolean {
+  return /\b(?:drop[- ]?off|charging|charger|ev charging)\b|下車|下车|充電|充电/i.test(requestText);
 }
 
 function findFixturePath(): string {

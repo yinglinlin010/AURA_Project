@@ -34,6 +34,7 @@ test("mock voice transports PCM through WebSocket VAD, routes the canned proposa
     if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
   });
   const intelligence = createIntelligenceStack(runtime, output);
+  assert.equal(intelligence.gemini.route, "mock");
   const gateway = new HmiGateway({ runtime, registry, host: "127.0.0.1", port: 0, voice: intelligence.voice, voiceOutput: output });
   const sockets: WebSocket[] = [];
   let statusListener: ((raw: WebSocket.RawData, isBinary: boolean) => void) | undefined;

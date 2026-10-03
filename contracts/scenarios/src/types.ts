@@ -53,6 +53,15 @@ export interface ScenarioExpected {
     max?: number;
   }>;
   signalFreshness?: Array<{ stepId: string; state: "fresh" | "cached" | "stale" | "unknown" }>;
+  taskLifecycle?: Array<{
+    stepId: string;
+    taskId: string;
+    status: "running" | "interrupted" | "completed";
+    actionCount?: number;
+    actionStatuses?: Array<"pending" | "running" | "paused" | "unknown" | "succeeded" | "failed" | "cancelled">;
+    completionEventCount?: number;
+    revalidationReality?: "simulated";
+  }>;
   voice?: {
     policyDecisions?: Array<{
       stepId: string;
@@ -109,8 +118,43 @@ export type ScenarioStep =
       task: {
         taskId: string;
         priority: "primary" | "secondary" | "critical";
+        goal?: string;
+        currentStep?: string;
+        conditions?: Array<{
+          key: string;
+          classification: "confirmed" | "inferred" | "unknown";
+          value?: string;
+          source: "simulated";
+          validForMs?: number;
+        }>;
       };
     }
+  | {
+      id: string;
+      atMs: number;
+      kind: "task.action";
+      taskId: string;
+      actionId: string;
+      idempotencyKey: string;
+      status: "pending" | "running" | "paused" | "unknown" | "succeeded" | "failed" | "cancelled";
+      reasonCode?: string;
+      repeatIdempotently?: boolean;
+    }
+  | {
+      id: string;
+      atMs: number;
+      kind: "task.resume";
+      taskId: string;
+      revalidation: {
+        reality: "simulated";
+        sourceLabel: string;
+        candidateFresh: boolean;
+        capabilityConfirmed: boolean;
+        authorizationCurrent: boolean;
+        priorActionOutcomeKnown: boolean;
+      };
+    }
+  | { id: string; atMs: number; kind: "task.complete"; taskId: string; repeatIdempotently?: boolean }
   | {
       id: string;
       atMs: number;

@@ -127,9 +127,34 @@ export interface ActiveTask {
   taskId: string;
   traceId: string;
   priority: "primary" | "secondary" | "critical";
-  status: "running" | "interrupted" | "completed";
+  status: "running" | "interrupted" | "completed" | "cancelled";
   startedAt: number;
   interruptionReason?: string;
+  /** The plan version changes whenever the goal, conditions, or current step changes. */
+  version?: number;
+  goal?: string;
+  conditions?: TaskCondition[];
+  currentStep?: string;
+  pauseReason?: string;
+  actionRecords?: TaskActionRecord[];
+}
+
+export interface TaskCondition {
+  key: string;
+  classification: "confirmed" | "inferred" | "unknown";
+  value?: string;
+  source?: SignalSource;
+  observedAt?: number;
+  expiresAt?: number;
+}
+
+export interface TaskActionRecord {
+  actionId: string;
+  idempotencyKey: string;
+  status: "pending" | "running" | "paused" | "succeeded" | "failed" | "cancelled" | "unknown";
+  startedAt: number;
+  updatedAt: number;
+  reasonCode?: string;
 }
 
 export interface DisplayConnectionState {
@@ -326,12 +351,24 @@ export type AuraDomainEvent =
       payload: { task: ActiveTask };
     })
   | (EventBase & {
+      type: "task.updated";
+      payload: { task: ActiveTask };
+    })
+  | (EventBase & {
+      type: "task.resumed";
+      payload: { taskId: string };
+    })
+  | (EventBase & {
       type: "task.interrupted";
       payload: { taskId: string; reasonCode: string };
     })
   | (EventBase & {
       type: "task.completed";
       payload: { taskId: string };
+    })
+  | (EventBase & {
+      type: "task.cancelled";
+      payload: { taskId: string; reasonCode: string };
     })
   | (EventBase & {
       type: "display.connection.changed";
@@ -363,6 +400,25 @@ export interface RegisterMessage {
 export interface CommandMessage {
   kind: "command";
   envelope: CommandEnvelope;
+}
+
+/** Center-only commands for the persisted task lifecycle. Each request is independently idempotent by commandId. */
+export type TaskLifecycleCommand =
+  | { type: "task.start"; payload: { taskId: string; priority: ActiveTask["priority"]; goal?: string; conditions?: TaskCondition[] } }
+  | { type: "task.update"; payload: { taskId: string; expectedVersion: number; goal?: string; conditions?: TaskCondition[]; currentStep?: string; pauseReason?: string } }
+  | { type: "task.action"; payload: { taskId: string; expectedVersion: number; actionId: string; status: TaskActionRecord["status"]; reasonCode?: string } }
+  | { type: "task.cancel"; payload: { taskId: string; expectedVersion: number; reasonCode?: string } }
+  | { type: "task.resume"; payload: { taskId: string; expectedVersion: number } };
+
+export interface TaskLifecycleMessage {
+  kind: "task.command";
+  protocolVersion: typeof PROTOCOL_VERSION;
+  commandId: string;
+  sessionId: string;
+  traceId: string;
+  sentAt: number;
+  sender: { deviceId: string; displayId: string };
+  command: TaskLifecycleCommand;
 }
 
 export interface ResyncMessage {
@@ -512,7 +568,7 @@ export interface VoiceTextMessage {
   text: string;
 }
 
-export type ClientMessage = RegisterMessage | CommandMessage | ResyncMessage | PingMessage | PlacesSearchMessage | JourneyRoutePreviewMessage | JourneyRecommendationMessage | VoiceStartMessage | VoiceStopMessage | VoiceTextMessage;
+export type ClientMessage = RegisterMessage | CommandMessage | TaskLifecycleMessage | ResyncMessage | PingMessage | PlacesSearchMessage | JourneyRoutePreviewMessage | JourneyRecommendationMessage | VoiceStartMessage | VoiceStopMessage | VoiceTextMessage;
 
 export interface WelcomeMessage {
   kind: "welcome";

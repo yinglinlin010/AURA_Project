@@ -14,6 +14,7 @@ test("Gemini Live authentication callback rejects a pending connect immediately"
       return new Promise(() => undefined);
     },
   });
+  assert.equal(adapter.route, "cloud");
   adapter.subscribe((event) => {
     if (event.type === "provider_error") reasons.push(event.reasonCode);
   });

@@ -1,5 +1,15 @@
 {
   "fixtureLabel": "SIMULATED — all trip, route, place and factor values are illustrative; not live provider output",
+  "primaryStory": {
+    "goal": "Find a place where it is convenient for Mom to get out, with charging nearby.",
+    "clarification": "Does proximity to an entrance or a passenger drop-off space matter?",
+    "clarificationState": "unknown until answered; do not infer age, disability, or mobility needs from Mom",
+    "evidenceBoundary": "Every candidate, drop-off, charging, route, and freshness value in this fixture is simulated. The runtime fixture source rebases observations to request time and labels them simulated/fresh; this is not a live provider refresh.",
+    "recoveryBeats": [
+      "A critical safety signal interrupts the active secondary task in the story scenario.",
+      "Task resume, action-result reconciliation, and exactly-once completion are not executable in the current scenario DSL."
+    ]
+  },
   "origin": {
     "value": { "label": "Munich (illustrative origin)", "location": { "latitude": 48.1372, "longitude": 11.5756 } },
     "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh"
@@ -26,6 +36,8 @@
       "deadlineMinutes": { "value": 75, "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh" },
       "preferenceFit": { "value": 0.9, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "nearbyFollowUps": { "value": [], "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" }
+      ,"passengerDropoff": { "value": { "access": "designated", "distanceToEntranceMeters": 45 }, "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh" }
+      ,"nearbyCharging": { "value": [{ "label": "Harbor Charging Hub", "availability": "available", "walkingDistanceKm": 0.1, "powerKw": 150 }], "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh" }
     },
     {
       "placeId": "garden-cafe",
@@ -43,7 +55,9 @@
       "deadlineMinutes": { "value": 75, "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh" },
       "walkingDistanceKm": { "value": 0.2, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
       "preferenceFit": { "value": 0.75, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
-      "nearbyFollowUps": { "value": [{ "label": "Pharmacy", "category": "essential", "walkingDistanceKm": { "value": 0.3, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" } }, { "label": "Market", "category": "shopping", "walkingDistanceKm": { "value": 0.5, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" } }], "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" }
+      "nearbyFollowUps": { "value": [{ "label": "Pharmacy", "category": "essential", "walkingDistanceKm": { "value": 0.3, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" } }, { "label": "Market", "category": "shopping", "walkingDistanceKm": { "value": 0.5, "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" } }], "source": "simulated", "sourceLabel": "journey-demo", "observedAt": 1790910000000, "freshness": "fresh" },
+      "passengerDropoff": { "value": { "access": "curbside", "distanceToEntranceMeters": 90 }, "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh" },
+      "nearbyCharging": { "value": [{ "label": "Garden Charging Point", "availability": "available", "walkingDistanceKm": 0.3, "powerKw": 50 }], "source": "simulated", "sourceLabel": "journey-demo-fixture", "observedAt": 1790910000000, "freshness": "fresh" }
     }
   ],
   "expectedTradeoff": "Higher POI rating versus shorter detour, reliable parking, deadline margin, and nearby follow-ups. The lower-rated Garden Cafe should rank higher for the complete journey."

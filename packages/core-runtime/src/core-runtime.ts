@@ -9,6 +9,7 @@ import {
 } from "../../../contracts/protocol/src/types.js";
 import type {
   ActionProposal,
+  AuraDomainEvent,
   ActionProposalRequest,
   AuraCommand,
   AuraDomainEventDraft,
@@ -18,6 +19,9 @@ import type {
   ConnectivityMode,
   JourneyState,
   JourneyStop,
+  ActiveTask,
+  TaskActionRecord,
+  TaskCondition,
   SignalFreshness,
   SignalSource,
   ContextIngestReceipt,
@@ -48,6 +52,18 @@ export interface CoreRuntimeOptions {
   initialJourney?: JourneyState;
   /** Synchronous write-through hook; called before a Journey mutation is published. */
   persistJourney?: (journey: JourneyState) => void;
+  /** Local write-through hook for compact task lifecycle state. */
+  initialTasks?: ActiveTask[];
+  persistTasks?: (tasks: ActiveTask[]) => void;
+  /** Production recovery checks are injected from authoritative evidence adapters. */
+  revalidateTask?: (task: Readonly<ActiveTask>) => TaskResumeRevalidation;
+}
+
+export interface TaskResumeRevalidation {
+  candidateFresh: boolean;
+  capabilityConfirmed: boolean;
+  authorizationCurrent: boolean;
+  priorActionOutcomeKnown: boolean;
 }
 
 interface StoredCommandReceipt {
@@ -69,6 +85,8 @@ export class CoreRuntime {
   private readonly now: () => number;
   private readonly registry: DisplayRegistry | undefined;
   private readonly persistJourney: ((journey: JourneyState) => void) | undefined;
+  private readonly persistTasks: ((tasks: ActiveTask[]) => void) | undefined;
+  private readonly revalidateTask: ((task: Readonly<ActiveTask>) => TaskResumeRevalidation) | undefined;
   private readonly commandReceipts = new Map<string, StoredCommandReceipt>();
   private readonly signalReceipts = new Map<
     string,
@@ -80,9 +98,30 @@ export class CoreRuntime {
     this.now = options.now ?? Date.now;
     this.registry = options.registry;
     this.persistJourney = options.persistJourney;
+    this.persistTasks = options.persistTasks;
+    this.revalidateTask = options.revalidateTask;
+    const recoveredTasks = structuredClone(options.initialTasks ?? []).map((task) => {
+      const recovered = task.status === "running" || task.status === "interrupted"
+        ? {
+            ...task,
+            status: "interrupted" as const,
+            interruptionReason: task.interruptionReason ?? "HOST_RESTART_RECOVERY_REQUIRED",
+            pauseReason: task.pauseReason ?? "HOST_RESTART_RECOVERY_REQUIRED",
+            ...(task.actionRecords === undefined ? {} : {
+              actionRecords: task.actionRecords.map((action) =>
+                ["pending", "running", "paused"].includes(action.status)
+                  ? { ...action, status: "unknown" as const, reasonCode: "HOST_RESTART_OUTCOME_RECONCILIATION_REQUIRED", updatedAt: Math.max(action.updatedAt, this.now()) }
+                  : action,
+              ),
+            }),
+          }
+        : task;
+      return recovered;
+    });
     this.state = {
       ...createInitialState(),
       journey: structuredClone(options.initialJourney ?? { stops: [] }),
+      activeTasks: recoveredTasks,
     };
     if (this.registry) assertDisplayRegistry(this.registry);
     this.eventBus = new EventBus({
@@ -94,6 +133,7 @@ export class CoreRuntime {
     this.eventBus.subscribe((event) => {
       this.state = reduceState(this.state, event);
     });
+    if (recoveredTasks.length > 0) this.persistTasks?.(recoveredTasks);
   }
 
   getState(): AuraSharedState {
@@ -193,14 +233,19 @@ export class CoreRuntime {
 
       for (const task of safetyOverride.interruptedTasks) {
         this.taskCancellations.cancel(task.taskId, safetyOverride.decision.reasonCode);
-        this.emit({
+        this.markUnresolvedActionsForSafetyInterrupt(task.taskId, traceId, commandId);
+        const interruption: AuraDomainEventDraft = {
           type: "task.interrupted",
           sessionId: this.sessionId,
           traceId,
           commandId,
           occurredAt: this.now(),
           payload: { taskId: task.taskId, reasonCode: safetyOverride.decision.reasonCode },
-        });
+        };
+        // Safety interruption must be reflected in live state even when
+        // durable storage is unavailable. On restart, persisted `running`
+        // tasks are recovered as interrupted and remain fail-closed.
+        this.emitSafetyCriticalTaskEvent(interruption);
         if (task.taskId.startsWith("action:")) {
           const proposalId = task.taskId.slice("action:".length);
           const proposal = this.state.activeProposals.find(
@@ -374,29 +419,121 @@ export class CoreRuntime {
     taskId: string;
     traceId: string;
     priority: "primary" | "secondary" | "critical";
+    goal?: string;
+    conditions?: TaskCondition[];
   }): AbortSignal {
     assertId(input.taskId, "INVALID_TASK_ID");
     assertId(input.traceId, "INVALID_TRACE_ID");
-    const existing = this.state.activeTasks.find(
-      (task) => task.taskId === input.taskId && task.status === "running",
-    );
-    if (existing) throw new Error("TASK_ALREADY_RUNNING");
+    const existing = this.state.activeTasks.find((task) => task.taskId === input.taskId);
+    if (existing) throw new Error(existing.status === "running" ? "TASK_ALREADY_RUNNING" : "TASK_ID_TERMINAL_OR_USED");
+    validateTaskGoal(input.goal);
+    validateTaskConditions(input.conditions);
     const signal = this.taskCancellations.register(input.taskId);
-    this.emit({
-      type: "task.registered",
-      sessionId: this.sessionId,
-      traceId: input.traceId,
-      commandId: null,
-      occurredAt: this.now(),
-      payload: {
-        task: {
-          ...input,
-          status: "running",
-          startedAt: this.now(),
+    try {
+      this.emit({
+        type: "task.registered",
+        sessionId: this.sessionId,
+        traceId: input.traceId,
+        commandId: null,
+        occurredAt: this.now(),
+        payload: {
+          task: {
+            ...input,
+            status: "running",
+            startedAt: this.now(),
+            version: 1,
+            ...(input.goal === undefined ? {} : { goal: input.goal }),
+            ...(input.conditions === undefined ? {} : { conditions: structuredClone(input.conditions) }),
+          },
         },
-      },
-    });
+      });
+    } catch (error) {
+      this.taskCancellations.cancel(input.taskId, "TASK_START_NOT_PERSISTED");
+      throw error;
+    }
     return signal;
+  }
+
+  updateTaskProgress(input: {
+    taskId: string;
+    traceId: string;
+    goal?: string;
+    conditions?: TaskCondition[];
+    currentStep?: string;
+    pauseReason?: string;
+  }): ActiveTask {
+    assertId(input.taskId, "INVALID_TASK_ID");
+    assertId(input.traceId, "INVALID_TRACE_ID");
+    const prior = this.state.activeTasks.find((candidate) => candidate.taskId === input.taskId);
+    if (!prior || prior.status === "completed" || prior.status === "cancelled") throw new Error("TASK_NOT_UPDATABLE");
+    validateTaskGoal(input.goal);
+    validateTaskConditions(input.conditions);
+    validateOptionalTaskText(input.currentStep, "INVALID_TASK_STEP");
+    validateOptionalTaskText(input.pauseReason, "INVALID_TASK_PAUSE_REASON");
+    const task: ActiveTask = {
+      ...prior,
+      version: (prior.version ?? 1) + 1,
+      ...(input.goal === undefined ? {} : { goal: input.goal }),
+      ...(input.conditions === undefined ? {} : { conditions: mergeTaskConditions(prior.conditions ?? [], input.conditions) }),
+      ...(input.currentStep === undefined ? {} : { currentStep: input.currentStep }),
+      ...(input.pauseReason === undefined ? {} : { pauseReason: input.pauseReason }),
+    };
+    this.emit({
+      type: "task.updated", sessionId: this.sessionId, traceId: input.traceId,
+      commandId: null, occurredAt: this.now(), payload: { task },
+    });
+    return structuredClone(task);
+  }
+
+  recordTaskAction(input: {
+    taskId: string;
+    traceId: string;
+    actionId: string;
+    idempotencyKey: string;
+    status: TaskActionRecord["status"];
+    reasonCode?: string;
+  }): ActiveTask {
+    const prior = this.state.activeTasks.find((candidate) => candidate.taskId === input.taskId);
+    if (!prior || prior.status === "completed") throw new Error("TASK_NOT_UPDATABLE");
+    for (const [value, reason] of [[input.actionId, "INVALID_ACTION_ID"], [input.idempotencyKey, "INVALID_ACTION_IDEMPOTENCY_KEY"], [input.traceId, "INVALID_TRACE_ID"]] as const) assertId(value, reason);
+    validateOptionalTaskText(input.reasonCode, "INVALID_ACTION_REASON");
+    const actions = prior.actionRecords ?? [];
+    if (actions.length >= 50 && !actions.some((action) => action.idempotencyKey === input.idempotencyKey)) throw new Error("TOO_MANY_TASK_ACTIONS");
+    const existing = actions.find((action) => action.idempotencyKey === input.idempotencyKey);
+    if (prior.status === "cancelled" && input.status !== "cancelled") throw new Error("TASK_NOT_UPDATABLE");
+    if (existing && existing.actionId !== input.actionId) throw new Error("TASK_ACTION_IDEMPOTENCY_KEY_REUSED");
+    const actionIdOwner = actions.find((action) => action.actionId === input.actionId);
+    if (actionIdOwner && actionIdOwner.idempotencyKey !== input.idempotencyKey) throw new Error("TASK_ACTION_ID_REUSED");
+    if (existing && existing.status === input.status && existing.reasonCode === input.reasonCode) return structuredClone(prior);
+    const allowedTransitions: Record<TaskActionRecord["status"], TaskActionRecord["status"][]> = {
+      pending: ["running", "paused", "succeeded", "failed", "cancelled", "unknown"],
+      running: ["paused", "succeeded", "failed", "cancelled", "unknown"],
+      paused: ["running", "failed", "cancelled", "unknown"],
+      unknown: ["succeeded", "failed", "cancelled"],
+      succeeded: [], failed: [], cancelled: [],
+    };
+    if (existing && !allowedTransitions[existing.status].includes(input.status)) throw new Error("TASK_ACTION_ALREADY_TERMINAL");
+    const now = this.now();
+    const record: TaskActionRecord = {
+      actionId: input.actionId,
+      idempotencyKey: input.idempotencyKey,
+      status: input.status,
+      startedAt: existing?.startedAt ?? now,
+      updatedAt: now,
+      ...(input.reasonCode === undefined ? {} : { reasonCode: input.reasonCode }),
+    };
+    const task: ActiveTask = {
+      ...prior,
+      version: (prior.version ?? 1) + 1,
+      actionRecords: existing
+        ? actions.map((action) => action.idempotencyKey === input.idempotencyKey ? record : action)
+        : [...actions, record],
+    };
+    this.emit({
+      type: "task.updated", sessionId: this.sessionId, traceId: input.traceId,
+      commandId: null, occurredAt: now, payload: { task },
+    });
+    return structuredClone(task);
   }
 
   completeTask(taskId: string, traceId: string): void {
@@ -404,7 +541,9 @@ export class CoreRuntime {
       (candidate) => candidate.taskId === taskId && candidate.status === "running",
     );
     if (!task) return;
-    this.taskCancellations.complete(taskId);
+    if (task.actionRecords?.some((action) => ["pending", "running", "paused", "unknown"].includes(action.status))) {
+      throw new Error("TASK_ACTION_RECONCILIATION_REQUIRED");
+    }
     this.emit({
       type: "task.completed",
       sessionId: this.sessionId,
@@ -413,6 +552,58 @@ export class CoreRuntime {
       occurredAt: this.now(),
       payload: { taskId },
     });
+    this.taskCancellations.complete(taskId);
+  }
+
+  cancelTask(taskId: string, traceId: string, reasonCode = "CANCELLED_BY_USER"): void {
+    assertId(taskId, "INVALID_TASK_ID");
+    assertId(traceId, "INVALID_TRACE_ID");
+    const task = this.state.activeTasks.find((candidate) => candidate.taskId === taskId && candidate.status === "running");
+    if (!task) return;
+    this.emit({
+      type: "task.cancelled",
+      sessionId: this.sessionId,
+      traceId,
+      commandId: null,
+      occurredAt: this.now(),
+      payload: { taskId, reasonCode },
+    });
+    this.taskCancellations.cancel(taskId, reasonCode);
+  }
+
+  /** Resume only after the caller rechecks every recovery boundary. This never runs automatically. */
+  resumeTask(input: {
+    taskId: string;
+    traceId: string;
+  }): AbortSignal {
+    assertId(input.taskId, "INVALID_TASK_ID");
+    assertId(input.traceId, "INVALID_TRACE_ID");
+    const task = this.state.activeTasks.find((candidate) => candidate.taskId === input.taskId);
+    if (!task || task.status !== "interrupted") throw new Error("TASK_NOT_RESUMABLE");
+    if (task.conditions?.some((condition) => condition.classification !== "unknown" && condition.expiresAt !== undefined && condition.expiresAt <= this.now())) {
+      throw new Error("TASK_CONDITION_EXPIRED");
+    }
+    if (task.actionRecords?.some((action) => action.status === "unknown")) throw new Error("TASK_ACTION_RECONCILIATION_REQUIRED");
+    const revalidation = this.revalidateTask?.(structuredClone(task));
+    if (!revalidation || !revalidation.candidateFresh || !revalidation.capabilityConfirmed ||
+        !revalidation.authorizationCurrent || !revalidation.priorActionOutcomeKnown) {
+      throw new Error("TASK_RECOVERY_REVALIDATION_REQUIRED");
+    }
+    const signal = this.taskCancellations.register(input.taskId);
+    try {
+      this.emit({
+        type: "task.resumed",
+        sessionId: this.sessionId,
+        traceId: input.traceId,
+        commandId: null,
+        occurredAt: this.now(),
+        payload: { taskId: input.taskId },
+      });
+    } catch (error) {
+      this.taskCancellations.cancel(input.taskId, "TASK_RESUME_NOT_PERSISTED");
+      throw error;
+    }
+    return signal;
   }
 
   setDisplayConnection(
@@ -454,7 +645,9 @@ export class CoreRuntime {
           signalId: `command:${envelope.commandId}`,
           type: "vehicle.telemetry",
           value: command.payload.vehicle,
-          source: "sensor",
+          // These commands originate from the simulator HMI. Real vehicle
+          // sensors must enter through a separately trusted adapter path.
+          source: "simulated",
           timestamp: envelope.sentAt,
         };
         this.ingestSignal(signal, envelope.traceId, envelope.commandId);
@@ -470,7 +663,9 @@ export class CoreRuntime {
               ? {}
               : { confidence: command.payload.confidence }),
           },
-          source: "sensor",
+          // The Developer Console is a simulated control surface, not a
+          // sensor authority. Real load estimates use a trusted adapter.
+          source: "simulated",
           timestamp: command.payload.timestamp,
           ...(command.payload.confidence === undefined
             ? {}
@@ -595,11 +790,24 @@ export class CoreRuntime {
     );
 
     if (result.status === "executing") {
-      this.startTask({
-        taskId: `action:${result.proposal.proposalId}`,
-        traceId: result.proposal.traceId,
-        priority: result.proposal.priority === "secondary" ? "secondary" : "primary",
-      });
+      try {
+        this.startTask({
+          taskId: `action:${result.proposal.proposalId}`,
+          traceId: result.proposal.traceId,
+          priority: result.proposal.priority === "secondary" ? "secondary" : "primary",
+        });
+      } catch {
+        // Do not leave a proposal marked executing when its durable task record
+        // could not be created. A later approval must be an explicit new flow.
+        this.changeProposalStatus(
+          result.proposal.proposalId,
+          "rejected",
+          "TASK_START_NOT_PERSISTED",
+          envelope.traceId,
+          envelope.commandId,
+        );
+        return { status: "REJECTED", reasonCode: "TASK_START_NOT_PERSISTED" };
+      }
     }
     return { status: "RECEIVED", reasonCode: result.reasonCode };
   }
@@ -669,7 +877,9 @@ export class CoreRuntime {
     const deferred = this.state.activeProposals.filter((proposal) => proposal.status === "deferred");
     for (const prior of deferred) {
       const proposal = { ...prior, status: "proposed" as const };
-      const decision = this.evaluateProposal(proposal, prior.consentGranted === true);
+      // Deferral invalidates the original authorization. Revalidation must
+      // return to the driver for a fresh consent decision.
+      const decision = this.evaluateProposal(proposal);
       if (decision.outcome === "EXECUTE" && proposal.kind === "ADD_TRIP_STOP") {
         try {
           this.persistJourneyForProposal(proposal);
@@ -783,6 +993,41 @@ export class CoreRuntime {
   }
 
   private emit(draft: AuraDomainEventDraft): void {
+    if (draft.type.startsWith("task.")) {
+      const next = reduceState(this.state, draft as AuraDomainEvent);
+      // Fail before publishing the lifecycle event if durable recovery state
+      // cannot be written. Task mutations therefore remain restart-safe.
+      this.persistTasks?.(next.activeTasks);
+    }
+    this.eventBus.publish(draft);
+  }
+
+  private markUnresolvedActionsForSafetyInterrupt(taskId: string, traceId: string, commandId: string | null): void {
+    const task = this.state.activeTasks.find((candidate) => candidate.taskId === taskId);
+    if (!task || !task.actionRecords?.some((action) => ["pending", "running", "paused"].includes(action.status))) return;
+    const occurredAt = this.now();
+    const updated: ActiveTask = {
+      ...task,
+      version: (task.version ?? 1) + 1,
+      actionRecords: task.actionRecords.map((action) =>
+        ["pending", "running", "paused"].includes(action.status)
+          ? { ...action, status: "unknown", reasonCode: "SAFETY_INTERRUPT_OUTCOME_RECONCILIATION_REQUIRED", updatedAt: Math.max(action.updatedAt, occurredAt) }
+          : action,
+      ),
+    };
+    const draft: AuraDomainEventDraft = {
+      type: "task.updated", sessionId: this.sessionId, traceId, commandId,
+      occurredAt, payload: { task: updated },
+    };
+    // Mark the live ledger as unresolved even if the store is unavailable;
+    // restart recovery applies the same conservative transition.
+    this.emitSafetyCriticalTaskEvent(draft);
+  }
+
+  private emitSafetyCriticalTaskEvent(draft: AuraDomainEventDraft): void {
+    const next = reduceState(this.state, draft as AuraDomainEvent);
+    try { this.persistTasks?.(next.activeTasks); }
+    catch { /* Safety state must still reach the live reducer and HMI. */ }
     this.eventBus.publish(draft);
   }
 }
@@ -1011,6 +1256,42 @@ function assertId(value: unknown, reasonCode: string): asserts value is string {
   if (typeof value !== "string" || value.length === 0 || value.length > 128) {
     throw new Error(reasonCode);
   }
+}
+
+function validateTaskGoal(goal: string | undefined): void {
+  if (goal !== undefined && (typeof goal !== "string" || goal.trim().length === 0 || goal.length > 1_000)) {
+    throw new Error("INVALID_TASK_GOAL");
+  }
+}
+
+function validateOptionalTaskText(value: string | undefined, reasonCode: string): void {
+  if (value !== undefined && (typeof value !== "string" || value.trim().length === 0 || value.length > 500)) {
+    throw new Error(reasonCode);
+  }
+}
+
+function validateTaskConditions(conditions: TaskCondition[] | undefined): void {
+  if (conditions === undefined) return;
+  if (!Array.isArray(conditions) || conditions.length > 20) throw new Error("INVALID_TASK_CONDITIONS");
+  const keys = new Set<string>();
+  for (const condition of conditions) {
+    if (!condition || typeof condition.key !== "string" || condition.key.trim().length === 0 || condition.key.length > 128 || keys.has(condition.key) ||
+        !["confirmed", "inferred", "unknown"].includes(condition.classification) ||
+        (condition.value !== undefined && (typeof condition.value !== "string" || condition.value.length > 500)) ||
+        (condition.source !== undefined && !["sensor", "simulated", "api", "derived", "cache"].includes(condition.source)) ||
+        (condition.observedAt !== undefined && (!Number.isSafeInteger(condition.observedAt) || condition.observedAt < 0)) ||
+        (condition.expiresAt !== undefined && (!Number.isSafeInteger(condition.expiresAt) || condition.expiresAt < 0)) ||
+        (condition.classification === "unknown" && condition.value !== undefined)) {
+      throw new Error("INVALID_TASK_CONDITION");
+    }
+    keys.add(condition.key);
+  }
+}
+
+function mergeTaskConditions(current: TaskCondition[], updates: TaskCondition[]): TaskCondition[] {
+  const byKey = new Map(current.map((condition) => [condition.key, condition]));
+  for (const condition of updates) byKey.set(condition.key, structuredClone(condition));
+  return [...byKey.values()];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

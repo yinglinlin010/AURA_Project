@@ -57,6 +57,7 @@ function reduceDomainState(state: AuraSharedState, event: AuraDomainEvent): Aura
                 ...proposal,
                 status: event.payload.status,
                 lastReasonCode: event.payload.reasonCode,
+                ...(event.payload.status === "deferred" ? { consentGranted: false } : {}),
               }
             : proposal,
         ),
@@ -65,6 +66,23 @@ function reduceDomainState(state: AuraSharedState, event: AuraDomainEvent): Aura
       return {
         ...state,
         activeTasks: upsertById(state.activeTasks, event.payload.task, (task) => task.taskId),
+      };
+    case "task.updated":
+      return {
+        ...state,
+        activeTasks: upsertById(state.activeTasks, event.payload.task, (task) => task.taskId),
+      };
+    case "task.resumed":
+      return {
+        ...state,
+        activeTasks: state.activeTasks.map((task) =>
+          task.taskId === event.payload.taskId
+            ? (() => {
+                const { interruptionReason: _reason, pauseReason: _pause, ...resumed } = task;
+                return { ...resumed, status: "running" as const };
+              })()
+            : task,
+        ),
       };
     case "task.interrupted":
       return {
@@ -84,6 +102,15 @@ function reduceDomainState(state: AuraSharedState, event: AuraDomainEvent): Aura
         ...state,
         activeTasks: state.activeTasks.map((task) =>
           task.taskId === event.payload.taskId ? { ...task, status: "completed" } : task,
+        ),
+      };
+    case "task.cancelled":
+      return {
+        ...state,
+        activeTasks: state.activeTasks.map((task) =>
+          task.taskId === event.payload.taskId
+            ? { ...task, status: "cancelled", interruptionReason: event.payload.reasonCode }
+            : task,
         ),
       };
     case "display.connection.changed": {

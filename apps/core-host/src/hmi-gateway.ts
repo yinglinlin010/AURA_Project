@@ -11,12 +11,18 @@ import { PROTOCOL_VERSION } from "../../../contracts/protocol/src/types.js";
 import type {
   ClientMessage,
   DisplayRegistration,
+  DisplayRole,
   DisplayRegistry,
+  ActiveTask,
+  ActionProposal,
+  AuraDomainEvent,
+  CommandReceipt,
   JourneyRecommendationMessage,
   JourneyRecommendationResultMessage,
   JourneyRoutePreviewMessage,
   PlacesSearchMessage,
   ServerMessage,
+  TaskLifecycleMessage,
   CanonicalPresenceState,
   PresenceSnapshot,
 } from "../../../contracts/protocol/src/types.js";
@@ -56,6 +62,7 @@ export class HmiGateway {
   private readonly validator: ValidateFunction;
   private readonly outboundValidator: ValidateFunction;
   private readonly clients = new Set<ClientSession>();
+  private readonly taskCommandReceipts = new Map<string, { fingerprint: string; receipt: CommandReceipt }>();
   private readonly voice: VoiceRuntime | undefined;
   private readonly voiceOutput: GatewayVoiceOutput | undefined;
   private readonly places: MapboxSearchBoxAdapter | undefined;
@@ -103,9 +110,10 @@ export class HmiGateway {
     this.server.on("connection", (socket) => this.accept(socket));
     this.unsubscribe = this.runtime.eventBus.subscribe((event) => {
       this.refreshPresence();
-      const message: ServerMessage = { kind: "event", event };
       for (const client of this.clients) {
-        if (client.registration) this.send(client.socket, message);
+        if (!client.registration) continue;
+        const projected = projectDisplayEvent(event, client.registration.role, this.runtime.getState().activeProposals);
+        if (projected) this.send(client.socket, { kind: "event", event: projected });
       }
     });
     this.unsubscribeVoice = this.voice?.subscribe((event) => {
@@ -184,6 +192,9 @@ export class HmiGateway {
         break;
       case "command":
         this.command(client, message);
+        break;
+      case "task.command":
+        this.taskCommand(client, message);
         break;
       case "resync":
         this.resync(client, message);
@@ -404,7 +415,7 @@ export class HmiGateway {
     });
     this.send(client.socket, {
       kind: "snapshot",
-      snapshot: this.runtime.createSnapshot(registration.displayId, this.presence),
+      snapshot: projectDisplaySnapshot(this.runtime.createSnapshot(registration.displayId, this.presence), registration.role),
     });
   }
 
@@ -441,6 +452,106 @@ export class HmiGateway {
     });
   }
 
+  /** All task lifecycle commands are Center-only; task resume remains fail-closed without host evidence. */
+  private taskCommand(client: ClientSession, message: TaskLifecycleMessage): void {
+    const registration = client.registration;
+    const envelope = message;
+    if (!registration) return this.sendError(client.socket, "REGISTRATION_REQUIRED", "Register a display before sending task commands.", envelope.traceId);
+    const sender = findRegisteredSender(this.registry, envelope.sender.displayId, envelope.sender.deviceId);
+    if (envelope.sessionId !== this.runtime.sessionId ||
+        envelope.sender.displayId !== registration.displayId ||
+        envelope.sender.deviceId !== registration.deviceId || !sender) {
+      return this.sendError(client.socket, "COMMAND_SENDER_MISMATCH", "Task command sender does not match this connection.", envelope.traceId);
+    }
+
+    const fingerprint = stableFingerprint({
+      command: envelope.command, sender: envelope.sender, sessionId: envelope.sessionId, traceId: envelope.traceId,
+    });
+    const cached = this.taskCommandReceipts.get(envelope.commandId);
+    if (cached) {
+      if (cached.fingerprint === fingerprint) {
+        this.send(client.socket, { kind: "ack", protocolVersion: PROTOCOL_VERSION, receipt: { ...cached.receipt, replayed: true } });
+      } else {
+        this.sendTaskReceipt(client, envelope, "REJECTED", "IDEMPOTENCY_KEY_REUSED", false);
+      }
+      return;
+    }
+
+    let status: CommandReceipt["status"] = "RECEIVED";
+    let reasonCode: string | undefined;
+    if (registration.role !== "center") {
+      status = "REJECTED";
+      reasonCode = "TASK_COMMAND_CENTER_ONLY";
+    } else {
+      try {
+        const command = envelope.command;
+        if (command.type === "task.start") {
+          this.runtime.startTask({ ...command.payload, traceId: envelope.traceId });
+        } else {
+          const task = this.runtime.getState().activeTasks.find((item) => item.taskId === command.payload.taskId);
+          if (!task) throw new Error("TASK_NOT_FOUND");
+          if ((task.version ?? 1) !== command.payload.expectedVersion) throw new Error("TASK_VERSION_CONFLICT");
+          switch (command.type) {
+            case "task.update":
+              this.runtime.updateTaskProgress({ ...command.payload, traceId: envelope.traceId });
+              break;
+            case "task.action":
+              this.runtime.recordTaskAction({
+                taskId: command.payload.taskId,
+                traceId: envelope.traceId,
+                actionId: command.payload.actionId,
+                idempotencyKey: envelope.commandId,
+                status: command.payload.status,
+                ...(command.payload.reasonCode === undefined ? {} : { reasonCode: command.payload.reasonCode }),
+              });
+              break;
+            case "task.cancel":
+              if (task.actionRecords?.some((action) => action.status === "unknown")) {
+                throw new Error("TASK_ACTION_OUTCOME_REQUIRES_RECONCILIATION");
+              }
+              if (task.actionRecords?.some((action) => action.status === "running")) {
+                throw new Error("TASK_ACTION_CANCELLATION_REQUIRES_ADAPTER");
+              }
+              this.runtime.cancelTask(command.payload.taskId, envelope.traceId, command.payload.reasonCode);
+              break;
+            case "task.resume":
+              // Runtime rejects absent candidate, vehicle-capability, authorization, or outcome evidence.
+              this.runtime.resumeTask({ taskId: command.payload.taskId, traceId: envelope.traceId });
+              break;
+          }
+        }
+      } catch (error) {
+        status = "REJECTED";
+        reasonCode = safeProviderError(error, "TASK_COMMAND_REJECTED");
+      }
+    }
+    const receipt = this.sendTaskReceipt(client, envelope, status, reasonCode, false);
+    this.taskCommandReceipts.set(envelope.commandId, { fingerprint, receipt });
+    if (this.taskCommandReceipts.size > 500) {
+      const oldest = this.taskCommandReceipts.keys().next().value;
+      if (oldest !== undefined) this.taskCommandReceipts.delete(oldest);
+    }
+  }
+
+  private sendTaskReceipt(
+    client: ClientSession,
+    message: TaskLifecycleMessage,
+    status: CommandReceipt["status"],
+    reasonCode: string | undefined,
+    replayed: boolean,
+  ): CommandReceipt {
+    const receipt: CommandReceipt = {
+      commandId: message.commandId,
+      traceId: message.traceId,
+      status,
+      stateRevision: this.runtime.getState().revision,
+      replayed,
+      ...(reasonCode === undefined ? {} : { reasonCode }),
+    };
+    this.send(client.socket, { kind: "ack", protocolVersion: PROTOCOL_VERSION, receipt });
+    return receipt;
+  }
+
   private resync(
     client: ClientSession,
     message: Extract<ClientMessage, { kind: "resync" }>,
@@ -456,13 +567,17 @@ export class HmiGateway {
     if (message.afterSequence !== undefined && this.runtime.eventBus.canReplayAfter(message.afterSequence)) {
       const missed = this.runtime.eventBus.eventsAfter(message.afterSequence);
       if (missed.length > 0) {
-        for (const event of missed) this.send(client.socket, { kind: "event", event });
+        const proposals = this.runtime.getState().activeProposals;
+        for (const event of missed) {
+          const projected = projectDisplayEvent(event, client.registration.role, proposals);
+          if (projected) this.send(client.socket, { kind: "event", event: projected });
+        }
         return;
       }
     }
     this.send(client.socket, {
       kind: "snapshot",
-      snapshot: this.runtime.createSnapshot(client.registration.displayId, this.presence),
+      snapshot: projectDisplaySnapshot(this.runtime.createSnapshot(client.registration.displayId, this.presence), client.registration.role),
     });
   }
 
@@ -544,6 +659,62 @@ function normalizeWebSocketPath(path: string): string {
   return path;
 }
 
+/** Center is the authorized surface for the full task plan and action ledger. */
+function projectDisplaySnapshot<T extends { state: { activeTasks: ActiveTask[]; activeProposals: ActionProposal[] } }>(snapshot: T, role: DisplayRole): T {
+  return {
+    ...snapshot,
+    state: {
+      ...snapshot.state,
+      activeTasks: role === "center" ? snapshot.state.activeTasks : snapshot.state.activeTasks.map(projectPublicTask),
+      activeProposals: snapshot.state.activeProposals.filter((proposal) => canSeeProposal(proposal, role)),
+    },
+  } as T;
+}
+
+/** Passenger handoff needs a separate authorization record, which this protocol does not yet carry. */
+function canSeeProposal(proposal: ActionProposal, role: DisplayRole): boolean {
+  if (role === proposal.requestedByRole) return true;
+  return role === proposal.targetRole && (role === "center" || role === "cluster");
+}
+
+function projectPublicTask(task: ActiveTask): ActiveTask {
+  return {
+    taskId: task.taskId,
+    traceId: task.traceId,
+    priority: task.priority,
+    status: task.status,
+    startedAt: task.startedAt,
+    ...(task.version === undefined ? {} : { version: task.version }),
+  };
+}
+
+/** Keep task events useful for display synchronization while removing private plan data. */
+function projectDisplayEvent(event: AuraDomainEvent, role: DisplayRole, proposals: readonly ActionProposal[]): AuraDomainEvent | null {
+  switch (event.type) {
+    case "proposal.created":
+      if (!canSeeProposal(event.payload.proposal, role)) return null;
+      break;
+    case "proposal.policy.decided":
+      if (!proposals.some((proposal) => proposal.proposalId === event.payload.decision.proposalId && canSeeProposal(proposal, role))) return null;
+      break;
+    case "proposal.consent.recorded":
+    case "proposal.status.changed":
+      if (!proposals.some((proposal) => proposal.proposalId === event.payload.proposalId && canSeeProposal(proposal, role))) return null;
+      break;
+  }
+  if (role === "center") return event;
+  switch (event.type) {
+    case "task.registered":
+    case "task.updated":
+      return { ...event, payload: { task: projectPublicTask(event.payload.task) } };
+    case "task.interrupted":
+    case "task.cancelled":
+      return { ...event, payload: { taskId: event.payload.taskId, reasonCode: "TASK_STATE_CHANGED" } };
+    default:
+      return event;
+  }
+}
+
 function rawToBuffer(raw: RawData): Buffer {
   if (Buffer.isBuffer(raw)) return raw;
   if (Array.isArray(raw)) return Buffer.concat(raw);
@@ -553,4 +724,13 @@ function rawToBuffer(raw: RawData): Buffer {
 function safeProviderError(error: unknown, fallback: string): string {
   const code = error instanceof Error ? error.message : "";
   return /^[A-Z0-9_:-]{1,96}$/.test(code) ? code : fallback;
+}
+
+function stableFingerprint(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableFingerprint).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableFingerprint(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
 }

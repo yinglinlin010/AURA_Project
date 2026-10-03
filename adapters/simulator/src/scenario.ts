@@ -11,6 +11,8 @@ import type {
   DisplayRegistry,
   PolicyDecision,
   SignalFreshness,
+  ActiveTask,
+  TaskCondition,
 } from "../../../contracts/protocol/src/types.js";
 import type { ScenarioDefinition, ScenarioExpected, ScenarioMetricName, ScenarioStateFieldExpectation, ScenarioStep, ScenarioVoiceState } from "../../../contracts/scenarios/src/types.js";
 import { CoreRuntime } from "../../../packages/core-runtime/src/index.js";
@@ -97,6 +99,16 @@ export interface ScenarioRunResult {
     consentAccepted?: boolean;
     journeyStopIds?: string[];
   }>;
+  taskLifecycleObservations: Array<{
+    stepId: string;
+    taskId: string;
+    status: ActiveTask["status"];
+    actionCount: number;
+    actionStatuses: NonNullable<ActiveTask["actionRecords"]>[number]["status"][];
+    completionEventCount: number;
+    revalidationReality?: "simulated";
+    revalidationSourceLabel?: string;
+  }>;
 }
 
 export class ScenarioRunner {
@@ -136,6 +148,7 @@ export class ScenarioRunner {
     const safetyObservations: ScenarioRunResult["safetyObservations"] = [];
     const voiceEvents: VoiceRuntimeEvent[] = [];
     const voiceStepObservations: ScenarioRunResult["voiceStepObservations"] = [];
+    const taskLifecycleObservations: ScenarioRunResult["taskLifecycleObservations"] = [];
     const initialVoiceState = this.voice?.currentState ?? null;
     const proposalAliases = new Map<string, string>();
     const unsubscribeVoice = this.voice?.subscribe((event) => voiceEvents.push(event));
@@ -203,6 +216,33 @@ export class ScenarioRunner {
           });
         commandReceipts.push(receipt);
         commandReceiptsByStep.set(step.id, receipt);
+      } else if (step.kind === "task.start") {
+        const conditions: TaskCondition[] | undefined = step.task.conditions?.map((condition) => ({
+          key: condition.key,
+          classification: condition.classification,
+          ...(condition.value === undefined ? {} : { value: condition.value }),
+          source: condition.source,
+          observedAt: startedAt + step.atMs,
+          ...(condition.validForMs === undefined ? {} : { expiresAt: startedAt + step.atMs + condition.validForMs }),
+        }));
+        this.runtime.startTask({
+          taskId: step.task.taskId,
+          traceId,
+          priority: step.task.priority,
+          ...(step.task.goal === undefined ? {} : { goal: step.task.goal }),
+          ...(conditions === undefined ? {} : { conditions }),
+        });
+        if (step.task.currentStep !== undefined) this.runtime.updateTaskProgress({ taskId: step.task.taskId, traceId, currentStep: step.task.currentStep });
+      } else if (step.kind === "task.action") {
+        const args = { taskId: step.taskId, traceId, actionId: step.actionId, idempotencyKey: step.idempotencyKey, status: step.status, ...(step.reasonCode === undefined ? {} : { reasonCode: step.reasonCode }) };
+        this.runtime.recordTaskAction(args);
+        if (step.repeatIdempotently) this.runtime.recordTaskAction(args);
+      } else if (step.kind === "task.resume") {
+        if (step.revalidation.reality !== "simulated" || !step.revalidation.sourceLabel.startsWith("scenario-fixture:")) throw new Error("SCENARIO_TASK_REVALIDATION_NOT_SIMULATED");
+        this.runtime.resumeTask({ taskId: step.taskId, traceId });
+      } else if (step.kind === "task.complete") {
+        this.runtime.completeTask(step.taskId, traceId);
+        if (step.repeatIdempotently) this.runtime.completeTask(step.taskId, traceId);
       } else if (step.kind === "intent") {
         if (!this.router) throw new Error(`SCENARIO_ROUTER_REQUIRED:${step.id}`);
         const sessionIdBefore = this.runtime.sessionId;
@@ -369,11 +409,6 @@ export class ScenarioRunner {
           assessment: structuredClone(assessment),
           ...(proposalDecision ? { proposalDecision } : {}),
         });
-      } else {
-        this.runtime.startTask({
-          ...step.task,
-          traceId,
-        });
       }
       for (const event of this.runtime.eventBus.eventsAfter(stepSequenceBefore)) {
         if (event.type === "proposal.policy.decided") {
@@ -381,6 +416,17 @@ export class ScenarioRunner {
         }
       }
       const state = this.runtime.getState();
+      for (const task of state.activeTasks) {
+        taskLifecycleObservations.push({
+          stepId: step.id,
+          taskId: task.taskId,
+          status: task.status,
+          actionCount: task.actionRecords?.length ?? 0,
+          actionStatuses: (task.actionRecords ?? []).map((action) => action.status),
+          completionEventCount: this.runtime.eventBus.eventsAfter(0).filter((event) => event.type === "task.completed" && event.payload.taskId === task.taskId).length,
+          ...(step.kind === "task.resume" && step.taskId === task.taskId ? { revalidationReality: step.revalidation.reality, revalidationSourceLabel: step.revalidation.sourceLabel } : {}),
+        });
+      }
       proposalLifecycle.push({
         stepId: step.id,
         ...(state.driver.currentLoad === undefined ? {} : { currentLoad: state.driver.currentLoad }),
@@ -435,6 +481,7 @@ export class ScenarioRunner {
       initialVoiceState,
       voiceEvents,
       voiceStepObservations,
+      taskLifecycleObservations,
     });
     return {
       scenarioId: scenario.id,
@@ -454,6 +501,7 @@ export class ScenarioRunner {
       initialVoiceState,
       expectationResults,
       voiceStepObservations,
+      taskLifecycleObservations,
     };
   }
 
@@ -503,6 +551,7 @@ function assertScenarioExpectations(
     initialVoiceState: VoiceRuntimeState | null;
     voiceEvents: VoiceRuntimeEvent[];
     voiceStepObservations: ScenarioRunResult["voiceStepObservations"];
+    taskLifecycleObservations: ScenarioRunResult["taskLifecycleObservations"];
   },
 ): ScenarioRunResult["expectationResults"] {
   const results: ScenarioRunResult["expectationResults"] = [];
@@ -537,6 +586,15 @@ function assertScenarioExpectations(
   }
   for (const item of expected?.signalFreshness ?? []) {
     check(`signalFreshness.${item.stepId}`, item.state, actual.signalObservations.find((signal) => signal.stepId === item.stepId)?.freshness);
+  }
+  for (const item of expected?.taskLifecycle ?? []) {
+    const observed = actual.taskLifecycleObservations.find((entry) => entry.stepId === item.stepId && entry.taskId === item.taskId);
+    if (!observed) throw new Error(`SCENARIO_EXPECTATION_FAILED:taskLifecycle.${item.stepId}:task_not_observed`);
+    check(`taskLifecycle.${item.stepId}.status`, item.status, observed.status);
+    if (item.actionCount !== undefined) check(`taskLifecycle.${item.stepId}.actionCount`, item.actionCount, observed.actionCount);
+    if (item.actionStatuses !== undefined) check(`taskLifecycle.${item.stepId}.actionStatuses`, item.actionStatuses, observed.actionStatuses);
+    if (item.completionEventCount !== undefined) check(`taskLifecycle.${item.stepId}.completionEventCount`, item.completionEventCount, observed.completionEventCount);
+    if (item.revalidationReality !== undefined) check(`taskLifecycle.${item.stepId}.revalidationReality`, item.revalidationReality, observed.revalidationReality);
   }
   for (const action of expected?.actions ?? []) {
     const aliasedProposalId = action.proposalAlias ? actual.proposalAliases.get(action.proposalAlias) : undefined;

@@ -28,7 +28,25 @@ async function main(): Promise<void> {
     throw new Error("INVALID_SCENARIO_TIME_SCALE: expected a number from 0 to 1");
   }
   const registry = loadRegistry();
-  const runtime = new CoreRuntime({ registry });
+  const scenario = loadScenarioFile(scenarioPath);
+  const resumeFixtures = new Map(scenario.timeline.filter((step) => step.kind === "task.resume").map((step) => [step.taskId, step.revalidation]));
+  // This test-only callback exposes scenario fixture claims to the same runtime
+  // used by the router. It is never imported by apps/core-host or vehicle adapters.
+  const runtime = new CoreRuntime({
+    registry,
+    revalidateTask(task) {
+      const fixture = resumeFixtures.get(task.taskId);
+      if (!fixture || fixture.reality !== "simulated" || !fixture.sourceLabel.startsWith("scenario-fixture:")) {
+        return { candidateFresh: false, capabilityConfirmed: false, authorizationCurrent: false, priorActionOutcomeKnown: false };
+      }
+      return {
+        candidateFresh: fixture.candidateFresh,
+        capabilityConfirmed: fixture.capabilityConfirmed,
+        authorizationCurrent: fixture.authorizationCurrent,
+        priorActionOutcomeKnown: fixture.priorActionOutcomeKnown,
+      };
+    },
+  });
   const router = new IntelligenceRouter({
     runtime,
     cloud: {
@@ -47,7 +65,6 @@ async function main(): Promise<void> {
     local: new Gemma2BOfflineSimulator(),
     trace: new StructuredTraceSink(() => {}),
   });
-  const scenario = loadScenarioFile(scenarioPath);
   const hasVoiceSteps = scenario.timeline.some((step) => step.kind.startsWith("voice."));
   const voiceHarness = hasVoiceSteps ? createScenarioVoiceHarness(runtime, router) : undefined;
   try {
@@ -62,6 +79,9 @@ async function main(): Promise<void> {
       `${JSON.stringify({
         ...(voiceHarness === undefined ? {} : {
           voiceSimulation: "mock provider path; no wake-word detection, real STT/TTS, microphone, device, or HMI WebSocket transport evidence",
+        }),
+        ...(resumeFixtures.size === 0 ? {} : {
+          taskRevalidationSimulation: "scenario-fixture evidence only; not provider, vehicle capability, or production authorization evidence",
         }),
         result,
         finalState: runtime.getState(),

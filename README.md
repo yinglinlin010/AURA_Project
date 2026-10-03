@@ -12,26 +12,28 @@ AURA 的產品規格、架構設計與實作紀錄集中在 [`docs/`](docs/READM
 - `scripts/`：開發與示範腳本
 - `AURA_UI_UX_Handoff/`：HMI 設計交接文件與參考圖片
 
-## 目前已完成進度 (Completed Features)
+產品方向與實作狀態請先看 [文件索引](docs/README.md)、[Master Spec §61.31](docs/product/AURA_MASTER_SPEC_2026-10-02.md#6131-product-direction-update-2026-10-04) 與 [需求稽核](docs/implementation/AURA_COMPETITION_V1_REQUIREMENTS_AUDIT.md)。
 
-根據目前的開發與驗證進度，專案已完成以下核心基礎架構與模擬情境：
+## 已有實作證據（含模擬路徑）
+
+以下列出可在 repository 找到的核心程式與模擬流程；項目存在不代表完成產品驗收、實體設備整合或真實服務驗證。各項證據與限制見需求稽核。
 
 ### 1. 核心通訊與 HMI 閘道器
-- **HMI Gateway 與 Event Bus**: 完成支援五大邏輯客戶端 (Cluster, Center, Passenger, Rear, Interactive Window) 的 WebSocket 連線，確保跨螢幕狀態同步。
-- **連線與復原 (Load-aware & HMI Recovery)**: 實作負載感知的呈現解析以及重連策略，確保離線或連線不穩時能平滑恢復畫面與狀態。
+- **HMI Gateway 與 Event Bus**: Gateway 設定五個邏輯顯示角色；自動化測試及單一瀏覽器模擬涵蓋多連線事件與重連，並不代表五個實體顯示器。
+- **連線與復原**: 有負載政策、重連和連線狀態邏輯；離線 continuity 的自動化情境使用模擬 provider／訊號，真實網路及服務恢復未驗證。
 
 ### 2. 智慧路由與外部服務介接
 - **Gemini Live 語音整合**: 實作語音即時連線生命週期管理 (Voice live connection lifecycle)，支援安全的連線中斷、逾時處理與狀態復原。
-- **混合 AI 代理與本機退回 (Hybrid AI & Fallback)**: 支援基於意圖的路由分發，在離線或無雲端支援情況下自動退回本機模型 (如 Ollama) 處理確定性指令。
-- **情境與行程推薦 (Journey Recommendation)**: 支援 POI 探索、路線規劃及乘客推薦情境的模擬與處理。
+- **混合 AI 路由**: 有確定性本機命令、可選 Ollama 候選器與雲端 adapter 路由；不代表已訓練的 AURA 模型或完整離線任務恢復。
+- **情境與行程推薦**: 有模擬推薦及 Mapbox 搜尋／路線預覽接線；即時 provider 結果、充電點與下車空間資料尚未完成驗證。
 
 ### 3. 行動安全與權限管控 (Action Gate & Safety)
-- **Action Gate 與同意管理器 (Consent Manager)**: 凡涉及車輛安全或行程變更的操作，皆需經由嚴格的權限驗證及中控台同意 (Center Consent) 方可放行。
-- **共享狀態與情境可靠性 (Shared Presence)**: 實作統一且具備權限隔離的共享狀態樹，禁止各顯示端進行非授權的狀態越權竄改。
+- **Action Gate 與同意管理器**: 有角色權限、Center 行程確認、高負荷延後及確定性 safety supervisor 邏輯；依各 action policy 決定是否需要同意。
+- **共享狀態與 Presence**: Core Runtime 管理共享狀態、事件與顯示角色；乘員私有任務資料的完整顯示投影仍待定義。
 
 ### 4. 情境模擬與自動化驗證
-- **情境模擬器 (Scenario Runner)**: 支援透過 YAML 定義檔快速測試複雜情境，包含駕駛高認知負載自動延遲提示 (Cognitive Load Deferral)、離線接續 (Offline Continuity)、語音干擾 (Barge-in) 及合成停車引導等功能。
-- **可靠性測試**: 加入自動化場景重播驗證機制，並整合於文件以保存驗證結果。
+- **情境模擬器**: YAML scenarios 覆蓋高負荷延後、模擬離線 continuity、語音 mock 路徑及合成停車指導。
+- **可重播檢查**: 有 scenario replay 紀錄；它驗證確定性模擬行為，不等於產品可靠度或延遲量測。
 
 ## 本機 Ollama 候選模型（Phase 6）
 

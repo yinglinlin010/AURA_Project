@@ -7,7 +7,7 @@ export interface RuntimeTraceRecord {
   durationMs: number;
   outcome: "ok" | "error" | "fallback" | "cancelled";
   model?: string;
-  route?: "local" | "cloud";
+  route?: "local" | "mock" | "cloud";
   fallbackReason?: string;
   policyOutcome?: string;
   rawAudioDropped?: true;

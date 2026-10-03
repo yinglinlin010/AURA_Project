@@ -8,6 +8,10 @@ specification for Codex / GPT / coding agents.\
 **Important:** Sections 61--64 contain the latest frozen decisions and
 supersede conflicting earlier wording. The final five HMI images linked
 in Section 64 remain the highest authority for visible composition.
+Section 61.31 records the product direction confirmed on 2026-10-04 and
+supersedes only the product-positioning and hero-scenario wording it
+identifies; it does not rewrite historical implementation evidence or
+silently reorder the Competition V1 roadmap.
 
 > This document freezes AURA's product, architecture, interaction rules,
 > and Competition V1 HMI design. Website composition, sponsor placement,
@@ -2970,16 +2974,18 @@ and the official competition brief.
 Working codename: **AURA**. The name is intentionally configurable and
 may be replaced later.
 
-> AURA is a local-first, context-aware, multi-display in-cabin AI agent
-> that understands the driver, passengers, vehicle, journey,
-> environment, and system state; decides when to help, how much to help,
-> and where the help should appear; and preserves useful capability
-> through connectivity loss.
+> AURA is a context-aware cabin AI that understands people and their
+> situation, helps them find and understand vehicle capabilities, and
+> coordinates authorized existing vehicle functions across the cabin.
+> It asks only for information that changes the plan, chooses when and
+> where to help, and preserves task progress through interruption.
 
-AURA is **not** limited to novice drivers. Novice parking is a strong
-entry scenario, but the product scope is broader: uncertainty, cognitive
-load, trip collaboration, contextual recommendations, cabin interaction,
-and continuity.
+AURA is not defined by a driver's experience level. Its first integrated
+scenario is finding a place with convenient passenger drop-off and nearby
+charging, then coordinating an available parking capability through an
+authorized existing vehicle system. Parking guidance remains a supporting
+capability where appropriate; AURA does not generate executable steering,
+braking, or acceleration control.
 
 AURA is one logical assistant across all displays and both local/cloud
 intelligence.
@@ -3270,6 +3276,14 @@ psychological diagnoses. They are supporting context signals.
 
 ## 61.13 Adaptive Assistance
 
+Adaptive parking guidance is a supporting capability where appropriate;
+it is not the primary product positioning. When an existing vehicle
+parking system is available, AURA may coordinate with that system only
+through its documented capability, feasibility, authorization, and
+completion interfaces. AURA must not implement its own real vehicle
+control path. Until such an interface is integrated and verified, parking
+execution in the prototype is explicitly simulated.
+
 AURA should first observe driving/parking context and only offer help
 when evidence supports it.
 
@@ -3495,6 +3509,11 @@ journey/collaboration story.
 
 ## 61.23 Competition Demo Story --- 4--5 Minute Target
 
+**Direction update:** The original restaurant/parking journey below is a
+historical Competition V1 demo proposal. Section 61.31 now defines the
+confirmed product hero scenario. Keep this earlier proposal as roadmap
+context; do not present it as the newly selected primary story.
+
 A coherent journey is preferred over a feature list:
 
 1.  Five HMI roles online; Window shows time/weather/ambient AURA.
@@ -3572,7 +3591,8 @@ A coherent journey is preferred over a feature list:
 -   real vehicle control,
 -   real brake actuation,
 -   real steering actuation,
--   real autonomous parking,
+-   AURA-generated real steering, braking, acceleration, or autonomous
+    parking control,
 -   production ADAS,
 -   production driver monitoring,
 -   full map-platform replacement,
@@ -3713,6 +3733,82 @@ First ask:
 
 If yes, implement it as a feature. If no, propose an explicit
 architecture change for review.
+
+## 61.31 Product Direction Update — 2026-10-04
+
+This dated amendment records the confirmed product direction. It
+supersedes conflicting product-positioning and hero-scenario text in
+earlier sections. Other frozen safety, consent, provenance, privacy,
+five-screen role, display visual, and architecture rules remain in force.
+
+### Product position and system responsibilities
+
+AURA understands people and context, coordinates existing in-vehicle
+capabilities, helps users find and understand vehicle functions, and
+continues tasks after interruption. AURA is responsible for interpreting
+requests, asking necessary questions, organizing options, scheduling
+assistance, coordinating HMI surfaces, and saving/restoring task state.
+Vehicle systems report capabilities and state, decide whether an
+operation is feasible, and perform permitted navigation, parking, or
+cabin actions. Safety Supervisor, Action Gate, policy, and consent remain
+authoritative. Five HMI roles present shared state according to role and
+policy; the Developer/Simulation Console remains an engineering tool,
+not a sixth production display.
+
+The first integrated scenario is: **“Find a place where it is
+convenient for Mom to get out, with charging nearby.”** Do not infer age,
+disability, or mobility needs from “Mom.” Ask whether proximity to an
+entrance or passenger drop-off space matters when that answer changes
+feasibility or ranking. Compare candidates with confirmed, inferred, and
+unknown facts labeled with their sources. Passenger surfaces may prepare
+or propose; only an authorized driver-facing path may approve a governed
+journey or vehicle action. High-load ordinary information is deferred and
+revalidated; necessary safety warnings retain deterministic priority.
+After network loss, changed conditions, unavailable candidates, or
+interruption, preserve the original goal and confirmed conditions,
+refresh stale data and capability, and do not repeat an action whose
+result is already known. At the destination, inspect the vehicle's
+reported parking capabilities and feasibility. If no verified existing
+vehicle interface is connected, show a simulation. After a confirmed
+parking result, continue with charging and walking tasks.
+
+### Three priority AI capabilities
+
+1. **Minimum necessary questions:** preserve explicit requirements,
+   preferences, constraints, assumptions, and unknowns separately. Ask
+   once for information that affects feasibility or ranking; never
+   invent facts when evidence is missing.
+2. **Assistance timing:** choose immediate, deferred, authorized
+   passenger handoff, or silence based on information value, urgency,
+   active task, and interruption cost. AI proposes; policy limits the
+   choices. Deferred information has an expiry and must be revalidated.
+   Handoff never transfers driver approval or exposes private data.
+3. **Task recovery:** persist progress and action outcomes in runtime
+   state/events rather than relying on chat history. On resume, recheck
+   freshness, vehicle capability, and authorization. Reconcile unknown
+   outcomes before retrying; cancellation, refusal, and timeout never
+   restart automatically.
+
+The task representation must preserve task/session identity and version;
+original goal; confirmed, inferred, and unknown conditions; option
+source, observation time, and expiry; current step and pause reason;
+proposal and approval state tied to an option version; action identity,
+execution result, reconciliation and duplicate protection; terminal
+reason; and passenger/display visibility limits. These are semantic
+requirements, not mandatory API names or a second state store.
+
+### Roadmap and evidence boundary
+
+This direction changes emphasis and introduces dependencies on durable
+task state, option freshness, authorization versioning, and an adapter
+for existing vehicle parking capabilities. It does not silently change
+the historical Phase 0–12 order in Section 61.25. Before implementation,
+map these dependencies to the frozen phases and record any proposed
+ordering change explicitly. Do not claim a completed automatic-parking
+integration, live charging/drop-off data, physical-device flow, or
+benchmark without corresponding evidence. For current implementation
+status and the next minimum task, see the [dated execution audit](../implementation/AURA_COMPETITION_V1_REQUIREMENTS_AUDIT.md)
+and the [handoff record](../implementation/AURA_AGENT_HANDOFF_2026-10-04.md).
 
 ------------------------------------------------------------------------
 

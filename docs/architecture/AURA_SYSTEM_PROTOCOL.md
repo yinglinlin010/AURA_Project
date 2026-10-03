@@ -16,4 +16,5 @@ Clients MUST register to receive data.
 
 ## 3. Critical Events
 - `vehicle.state.updated`: Payload contains `vehicle: { speedKph: number, gear: string }`.
-- `safety.override.activated`: Payload contains AEB engagement data. Frontend MUST flash CRITICAL RED immediately.
+- `safety.override.activated`: A deterministic Safety Supervisor decision activates a typed warning in shared state. HMI clients render the active warning according to the Master Spec's safety priority. This contract does not establish an AEB signal or physical brake engagement.
+- `safety.warning.cleared`: A matching Safety Supervisor event clears the active warning. The current protocol/reducer has this event shape; the end-to-end runtime clear producer and HMI restoration lifecycle remain unverified. Generic model proposals cannot activate or clear safety warnings.

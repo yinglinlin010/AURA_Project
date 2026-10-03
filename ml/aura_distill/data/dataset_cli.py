@@ -52,7 +52,9 @@ def cmd_review(args: argparse.Namespace) -> None:
     print(f"Human review queue: {len(pending)} pending record(s). Reviewer: {args.reviewer_id}")
     for row in pending:
         print("\n" + json.dumps(row, ensure_ascii=False, indent=2))
-        action = input("[a]pprove, [r]eject, [e]dit then decide: ").strip().lower()
+        action = input("[a]pprove, [r]eject, [e]dit then decide, [q]uit: ").strip().lower()
+        if action == "q":
+            break
         if action == "e":
             utterance = input("Edited utterance (Enter keeps current): ")
             if utterance:
@@ -64,16 +66,41 @@ def cmd_review(args: argparse.Namespace) -> None:
                 except json.JSONDecodeError as e:
                     raise RecordError(f"invalid edited label JSON: {e}") from e
             validate_record(row)
-            action = input("Decision after edit, [a]pprove or [r]eject: ").strip().lower()
+            action = input("Decision after edit, [a]pprove, [r]eject, or [q]uit: ").strip().lower()
+            if action == "q":
+                break
         if action not in {"a", "r"}:
             raise RecordError(f"invalid review action {action!r}; queue remains unchanged for this row")
+
+        # 10% Deterministic Double-Check (Maker-Checker)
+        is_sampled = int(hashlib.md5(row["record_id"].encode()).hexdigest(), 16) % 10 == 0
+        final_reviewer_id = args.reviewer_id
+
+        if is_sampled:
+            print("\n🎲 [抽樣複審] 這筆資料被系統隨機抽中！必須由第二位審查員進行覆核 (Maker-Checker)。")
+            second_reviewer = input("請輸入第二位審查員的 ID (或輸入 [q] 暫停審查這筆資料): ").strip()
+            if second_reviewer.lower() == 'q' or not second_reviewer:
+                print("已跳過此筆資料，狀態保留為 pending。")
+                continue
+            if second_reviewer == args.reviewer_id:
+                print("⚠️ 警告：第二位審查員不能與第一位相同！已跳過此筆資料。")
+                continue
+
+            second_action = input(f"[{second_reviewer}] 請覆核第一位審查員的決定 ({'approve' if action == 'a' else 'reject'}) - [y]es 同意, [n]o 拒絕: ").strip().lower()
+            if second_action != 'y':
+                print("兩位審查員意見不一致，已退回 pending 狀態。")
+                continue
+
+            final_reviewer_id = f"{args.reviewer_id}+{second_reviewer}"
+            print("✅ 雙重複審通過！")
+
         validate_record(row)
         row["provenance"]["review_status"] = "human_approved" if action == "a" else "human_rejected"
-        row["provenance"]["reviewer_id"] = args.reviewer_id
+        row["provenance"]["reviewer_id"] = final_reviewer_id
         row["provenance"]["reviewed_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
         validate_record(row)
         persist()
-        print(f"Saved {row['record_id']}: {row['provenance']['review_status']}")
+        print(f"Saved {row['record_id']}: {row['provenance']['review_status']} (Reviewer: {final_reviewer_id})")
 
 
 def cmd_review_rights(args: argparse.Namespace) -> None:

@@ -4,6 +4,8 @@
 
 - [整合主規格](product/AURA_MASTER_SPEC_2026-10-02.md)：產品、架構與 HMI 的主要依據
 - [產品說明](product/PRODUCT.md)
+- [方向確認與執行計畫](implementation/AURA_AGENT_HANDOFF_2026-10-04.md)：原方向文件的接手狀態、Git 基準、實作缺口與下一階段建議；產品權威內容仍以 Master Spec §61.31 為準
+- [Competition V1 需求稽核](implementation/AURA_COMPETITION_V1_REQUIREMENTS_AUDIT.md)：程式、歷史檢查結果與未驗證項目
 - [HMI 設計交接資料與圖片](../AURA_UI_UX_Handoff/)
 
 ## 架構設計

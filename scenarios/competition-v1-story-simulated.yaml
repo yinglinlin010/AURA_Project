@@ -1,17 +1,18 @@
 id: competition-v1-story-simulated
 name: Competition V1 journey story (simulation)
 description: >-
-  One deterministic, replayable composition of the currently supported story
-  paths: restaurant-intent routing, rear-to-driver consent, cognitive-load
-  deferral, synthetic parking assistance, a synthetic critical warning, mock
-  voice stop, and offline/local/online routing. Five display entries below
-  assert enabled logical registry roles and shared snapshots only. This does
-  not provide recommendation ranking/comparison, rendered multi-HMI sync,
-  Window clock/weather content, noisy-cabin or wake-word evidence, real parking
-  sensing/guidance, warning or speech latency, provider refresh behavior, live
-  provider/network behavior, or physical-device evidence. The same simulated
-  place-evidence signal carries stale metadata offline and fresh metadata after
-  reconnection; the recommender does not consume this generic signal.
+  Primary story: find a place where it is convenient for Mom to get out, with
+  charging nearby. Ask whether entrance proximity or a passenger drop-off
+  space matters; infer no age or mobility need. This replay composes supported
+  simulation paths: intent routing, rear-to-driver consent, load deferral,
+  synthetic parking, one safety interruption, mock voice stop, and offline /
+  local / online routing. Display entries assert logical roles and shared
+  snapshots only. The DSL executes task recovery with an explicitly simulated
+  fixture revalidation result. It does not execute the clarification or
+  recommendation comparison. No live provider/network, physical device, real parking sensing,
+  wake-word, or latency evidence is produced. Generic place signal freshness
+  changes from stale to fresh after simulated reconnection; recommender does
+  not consume that signal.
 timeline:
   - id: simulated-network-online
     atMs: 0
@@ -29,7 +30,7 @@ timeline:
   - id: restaurant-request
     atMs: 100
     kind: intent
-    text: Find a restaurant with easy parking, little detour, drinks nearby, and enough time to reach the hotel
+    text: Find a place where it is convenient for Mom to get out, with charging nearby. Does entrance proximity or a passenger drop-off space matter?
     requestedByRole: front_passenger
     expectedAvailability: cloud
   - id: complex-driving-moment
@@ -83,7 +84,29 @@ timeline:
   - id: start-secondary-task
     atMs: 900
     kind: task.start
-    task: { taskId: story-secondary-task, priority: secondary }
+    task:
+      taskId: story-secondary-task
+      priority: secondary
+      goal: Find a place where it is convenient for Mom to get out, with charging nearby
+      currentStep: Compare simulated drop-off and charging options
+      conditions:
+        - key: primary-goal
+          classification: confirmed
+          value: Convenient place for Mom to get out, with charging nearby
+          source: simulated
+          validForMs: 120000
+        - key: entrance-proximity-preference
+          classification: unknown
+          source: simulated
+          validForMs: 120000
+  - id: simulated-action-starts
+    atMs: 950
+    kind: task.action
+    taskId: story-secondary-task
+    actionId: compare-dropoff-and-charging-options
+    idempotencyKey: compare-options-v1
+    status: running
+    reasonCode: SIMULATED_SCENARIO_ACTION_STARTED
   - id: synthetic-critical-obstacle
     atMs: 1000
     kind: signal
@@ -91,6 +114,31 @@ timeline:
       type: safety.critical
       value: { severity: critical, category: obstacle }
       confidence: 1
+  - id: reconcile-simulated-action-outcome
+    atMs: 1020
+    kind: task.action
+    taskId: story-secondary-task
+    actionId: compare-dropoff-and-charging-options
+    idempotencyKey: compare-options-v1
+    status: succeeded
+    reasonCode: SIMULATED_SCENARIO_OUTCOME_CONFIRMED
+    repeatIdempotently: true
+  - id: resume-after-simulated-revalidation
+    atMs: 1040
+    kind: task.resume
+    taskId: story-secondary-task
+    revalidation:
+      reality: simulated
+      sourceLabel: scenario-fixture:mom-dropoff-charging
+      candidateFresh: true
+      capabilityConfirmed: true
+      authorizationCurrent: true
+      priorActionOutcomeKnown: true
+  - id: complete-recovered-task
+    atMs: 1060
+    kind: task.complete
+    taskId: story-secondary-task
+    repeatIdempotently: true
   - id: user-invokes-voice
     atMs: 1100
     kind: voice.start
@@ -150,8 +198,6 @@ expected:
         equals: online
       - path: /activeSafetyWarning/severity
         equals: critical
-      - path: /activeTasks/0/interruptionReason
-        equals: CRITICAL_SAFETY_SIGNAL_LOCAL_OVERRIDE
   commands:
     - stepId: rear-proposes-drink-stop
       status: RECEIVED
@@ -217,6 +263,32 @@ expected:
   signalFreshness:
     - { stepId: cached-place-evidence-stale, state: stale }
     - { stepId: refreshed-place-evidence-fresh, state: fresh }
+  taskLifecycle:
+    - stepId: synthetic-critical-obstacle
+      taskId: story-secondary-task
+      status: interrupted
+      actionCount: 1
+      actionStatuses: [unknown]
+      completionEventCount: 0
+    - stepId: reconcile-simulated-action-outcome
+      taskId: story-secondary-task
+      status: interrupted
+      actionCount: 1
+      actionStatuses: [succeeded]
+      completionEventCount: 0
+    - stepId: resume-after-simulated-revalidation
+      taskId: story-secondary-task
+      status: running
+      actionCount: 1
+      actionStatuses: [succeeded]
+      completionEventCount: 0
+      revalidationReality: simulated
+    - stepId: complete-recovered-task
+      taskId: story-secondary-task
+      status: completed
+      actionCount: 1
+      actionStatuses: [succeeded]
+      completionEventCount: 1
   voice:
     statesAtSteps:
       - { stepId: user-invokes-voice, state: LISTENING }

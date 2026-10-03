@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CANONICAL_PRESENCE_STATES, type ConnectivityMode, type PresenceSnapshot, type SignalSource } from '../../../../contracts/protocol/src/types';
+import { CANONICAL_PRESENCE_STATES, type ActiveTask, type ConnectivityMode, type PresenceSnapshot, type SignalSource, type TaskLifecycleCommand } from '../../../../contracts/protocol/src/types';
 import { acceptGatewayEvent, acceptGatewaySnapshot, createGatewayOrderCursor, establishGatewaySession, type GatewayDomainEvent } from './gateway-order';
 import { reconnectDelayMs } from './reconnect-policy';
 
@@ -74,6 +74,7 @@ export interface GatewayState {
   proposals: SharedProposal[];
   journeyStops: SharedStop[];
   activeSafetyWarning: SharedSafetyWarning | null;
+  activeTasks: ActiveTask[];
   presence: PresenceSnapshot | null;
   connections: Record<DisplayId, DisplayConnection>;
 }
@@ -88,6 +89,7 @@ const initialState: GatewayState = {
   proposals: [],
   journeyStops: [],
   activeSafetyWarning: null,
+  activeTasks: [],
   presence: null,
   connections: initialConnections,
 };
@@ -112,6 +114,8 @@ const latestPresence = (current: PresenceSnapshot | null, candidate: unknown): P
 export function useAuraCommand() {
   const socketsRef = useRef<Partial<Record<DisplayId, WebSocket>>>({});
   const gatewayOrderRef = useRef(createGatewayOrderCursor());
+  const centerTaskSequenceRef = useRef<number | null>(null);
+  const pendingTaskCommandRef = useRef<string | null>(null);
   const stateRef = useRef<GatewayState>(initialState);
   const voiceResourcesRef = useRef<VoiceResources | null>(null);
   const pendingAudioContextRef = useRef<AudioContext | null>(null);
@@ -130,6 +134,7 @@ export function useAuraCommand() {
   const [state, setState] = useState<GatewayState>(initialState);
   const [discovery, setDiscovery] = useState<DiscoveryState>({ origin: emptySearch(), destination: emptySearch(), route: emptyRoute() });
   const [recommendation, setRecommendation] = useState<JourneyRecommendationState>(emptyRecommendation);
+  const [taskReceipt, setTaskReceipt] = useState<{ commandId: string; status: string; reasonCode?: string } | null>(null);
   stateRef.current = state;
   recommendationStateRef.current = recommendation;
   voiceStatusRef.current = voice.status;
@@ -257,6 +262,23 @@ export function useAuraCommand() {
             setState((current) => current.activeSafetyWarning?.warningId === warningId ? { ...current, activeSafetyWarning: null } : current);
           }
         };
+        const applyCenterTaskEvent = (event: GatewayDomainEvent) => {
+          if (registration.displayId !== 'center-main' || event.sessionId !== gatewayOrderRef.current.sessionId ||
+              (centerTaskSequenceRef.current !== null && event.sequence <= centerTaskSequenceRef.current)) return;
+          centerTaskSequenceRef.current = event.sequence;
+          const payload = event.payload as { task?: ActiveTask; taskId?: string; reasonCode?: string };
+          if ((event.type === 'task.registered' || event.type === 'task.updated') && payload.task) {
+            setState((current) => ({ ...current, activeTasks: current.activeTasks.some((task) => task.taskId === payload.task?.taskId)
+              ? current.activeTasks.map((task) => task.taskId === payload.task?.taskId ? payload.task! : task)
+              : [...current.activeTasks, payload.task!] }));
+          } else if (payload.taskId) {
+            setState((current) => ({ ...current, activeTasks: current.activeTasks.map((task) => task.taskId !== payload.taskId ? task
+              : event.type === 'task.resumed' ? { ...task, status: 'running', pauseReason: undefined, interruptionReason: undefined }
+              : event.type === 'task.interrupted' ? { ...task, status: 'interrupted', interruptionReason: payload.reasonCode }
+              : event.type === 'task.cancelled' ? { ...task, status: 'cancelled', interruptionReason: payload.reasonCode }
+              : event.type === 'task.completed' ? { ...task, status: 'completed' } : task) }));
+          }
+        };
         socket.addEventListener('open', () => {
           if (!mounted || socketsRef.current[registration.displayId] !== socket) return;
           reconnected = reconnecting.delete(registration.displayId);
@@ -296,9 +318,12 @@ export function useAuraCommand() {
                 if (seenSessions.has(nextCursor.sessionId)) return;
                 seenSessions.add(nextCursor.sessionId);
                 gatewayOrderRef.current = nextCursor;
+                centerTaskSequenceRef.current = null;
+                pendingTaskCommandRef.current = null;
+                setTaskReceipt(null);
                 resyncRequested = false;
                 setState((current) => ({ ...current, speedKph: initialState.speedKph, load: initialState.load,
-                  connectivity: initialState.connectivity, proposals: [], journeyStops: [], activeSafetyWarning: null, presence: null }));
+                  connectivity: initialState.connectivity, proposals: [], journeyStops: [], activeSafetyWarning: null, activeTasks: [], presence: null }));
               } else gatewayOrderRef.current = nextCursor;
               socketSessionId = nextCursor.sessionId;
               setConnection({ sessionId: data.sessionId, status: 'connected', lastMessage: `Registered as ${data.displayId} / ${data.role}` });
@@ -308,6 +333,12 @@ export function useAuraCommand() {
           } else if (data.kind === 'snapshot') {
             const snapshot = data.snapshot;
             const shared = snapshot?.state;
+            if (registration.displayId === 'center-main' && snapshot?.sessionId === gatewayOrderRef.current.sessionId &&
+                Number.isSafeInteger(snapshot.sequence) && Array.isArray(shared?.activeTasks) &&
+                (centerTaskSequenceRef.current === null || snapshot.sequence >= centerTaskSequenceRef.current)) {
+              centerTaskSequenceRef.current = snapshot.sequence;
+              setState((current) => ({ ...current, activeTasks: shared.activeTasks }));
+            }
             const result = acceptGatewaySnapshot(gatewayOrderRef.current, snapshot);
             if (result.accepted) gatewayOrderRef.current = result.cursor;
             setState((current) => ({
@@ -324,6 +355,7 @@ export function useAuraCommand() {
               connections: { ...current.connections, [registration.displayId]: { ...current.connections[registration.displayId], lastMessage: 'Shared state snapshot received' } },
             }));
             if (result.accepted) {
+              if (registration.displayId === 'center-main') result.events.forEach(applyCenterTaskEvent);
               result.events.forEach(applyDomainEvent);
               resyncRequested = false;
               if (result.gap) sendResync();
@@ -333,6 +365,7 @@ export function useAuraCommand() {
             setState((current) => ({ ...current, presence: latestPresence(current.presence, data.presence) }));
           } else if (data.kind === 'event') {
             const event = data.event;
+            if (event?.type?.startsWith('task.')) applyCenterTaskEvent(event);
             const result = acceptGatewayEvent(gatewayOrderRef.current, event);
             if (result.overflow) {
               // The bounded pending queue was discarded; request an authoritative
@@ -342,6 +375,7 @@ export function useAuraCommand() {
             }
             if (!result.accepted) return;
             gatewayOrderRef.current = result.cursor;
+            if (registration.displayId === 'center-main') result.events.forEach(applyCenterTaskEvent);
             result.events.forEach(applyDomainEvent);
             if (!result.gap) resyncRequested = false;
             else sendResync();
@@ -403,6 +437,10 @@ export function useAuraCommand() {
             }
           } else if (data.kind === 'ack') {
             const receipt = data.receipt;
+            if (registration.displayId === 'center-main' && receipt?.commandId === pendingTaskCommandRef.current) {
+              pendingTaskCommandRef.current = null;
+              setTaskReceipt({ commandId: receipt.commandId, status: receipt.status, ...(receipt.reasonCode ? { reasonCode: receipt.reasonCode } : {}) });
+            }
             setConnection({ lastMessage: `Command ${receipt?.status ?? 'acknowledged'}${receipt?.reasonCode ? ` · ${receipt.reasonCode}` : ''}` });
             const pendingRecommendation = recommendationStateRef.current;
             if (registration.displayId === 'center-main' && receipt?.status === 'REJECTED' && pendingRecommendation.status === 'submitted' && receipt.commandId === pendingRecommendation.commandId) {
@@ -448,6 +486,10 @@ export function useAuraCommand() {
           reconnecting.add(registration.displayId);
           resyncRequested = false;
           setConnection({ status: 'disconnected', sessionId: null, lastMessage: 'Gateway connection closed' });
+          if (registration.displayId === 'center-main' && pendingTaskCommandRef.current) {
+            setTaskReceipt({ commandId: pendingTaskCommandRef.current, status: 'UNKNOWN', reasonCode: 'CONNECTION_LOST_CHECK_TASK_STATE' });
+            pendingTaskCommandRef.current = null;
+          }
           if (registration.displayId === 'front-passenger-main') setDiscovery({ origin: emptySearch(), destination: emptySearch(), route: emptyRoute() });
           if (registration.displayId === 'center-main' && recommendationRequestRef.current) {
             const pendingRequest = recommendationRequestRef.current;
@@ -631,6 +673,21 @@ export function useAuraCommand() {
     return true;
   }, [state.connections]);
 
+  const sendTaskCommand = useCallback((command: TaskLifecycleCommand) => {
+    const connection = state.connections['center-main'];
+    const socket = socketsRef.current['center-main'];
+    if (!socket || socket.readyState !== WebSocket.OPEN || !connection.sessionId || pendingTaskCommandRef.current) return false;
+    const commandId = crypto.randomUUID();
+    pendingTaskCommandRef.current = commandId;
+    setTaskReceipt({ commandId, status: 'PENDING' });
+    socket.send(JSON.stringify({
+      kind: 'task.command', protocolVersion: PROTOCOL_VERSION, commandId,
+      sessionId: connection.sessionId, traceId: traceId(), sentAt: Date.now(),
+      sender: { deviceId: connection.deviceId, displayId: 'center-main' }, command,
+    }));
+    return true;
+  }, [state.connections]);
+
   const sendDiscovery = useCallback((message: Record<string, unknown>) => {
     const displayId: DisplayId = 'front-passenger-main';
     const socket = socketsRef.current[displayId];
@@ -707,5 +764,5 @@ export function useAuraCommand() {
     return sent;
   }, [recommendation, sendCommand]);
 
-  return { state, sendCommand, voice, startVoice, stopVoice, discovery, searchPlaces, previewRoute, recommendation, requestJourneyRecommendation, submitJourneyRecommendation };
+  return { state, sendCommand, sendTaskCommand, taskReceipt, voice, startVoice, stopVoice, discovery, searchPlaces, previewRoute, recommendation, requestJourneyRecommendation, submitJourneyRecommendation };
 }

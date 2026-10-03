@@ -14,6 +14,7 @@ export type VoiceProviderEvent =
 export interface VoiceProvider {
   readonly connected: boolean;
   readonly modelName?: string;
+  readonly route?: "local" | "mock" | "cloud";
   subscribe(listener: (event: VoiceProviderEvent) => void): () => void;
   connect(traceId: string): Promise<void>;
   sendAudioChunk(data: Buffer, mimeType?: string, traceId?: string): void;
@@ -278,7 +279,7 @@ export class VoiceRuntime {
       durationMs: Math.max(0, this.now() - this.turnStartedAt),
       outcome,
       model: this.adapter.modelName ?? "voice-provider",
-      route: "cloud",
+      route: this.adapter.route ?? "cloud",
       ...(fallbackReason === undefined ? {} : { fallbackReason }),
       rawAudioDropped: true,
     });

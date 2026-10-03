@@ -5,6 +5,8 @@ coverage/
 .DS_Store
 .agents/
 .impeccable/
+data/aura-journeys.sqlite*
+data/aura-tasks.sqlite*
 
 # Rights-pending training drafts and generated split/model artifacts remain local.
 ml/aura_distill/data/review_queue.jsonl

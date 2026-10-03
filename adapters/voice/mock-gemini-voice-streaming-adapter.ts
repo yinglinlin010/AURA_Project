@@ -4,6 +4,7 @@ import type { VoiceProvider, VoiceProviderEvent } from "../../packages/core-runt
 /** Credential-free transport simulator. It exercises PCM framing, local VAD, and Action Gate routing. */
 export class MockGeminiVoiceStreamingAdapter implements VoiceProvider, ProposalSource {
   readonly modelName = "mock-gemini-live";
+  readonly route = "mock" as const;
   private readonly listeners = new Set<(event: VoiceProviderEvent) => void>();
   private isConnected = false;
   private speechActive = false;

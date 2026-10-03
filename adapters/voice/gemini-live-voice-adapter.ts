@@ -82,6 +82,7 @@ function systemInstructionFor(assistantName: string): string {
 }
 
 export class GeminiLiveVoiceAdapter implements ProposalSource, VoiceProvider {
+  readonly route = "cloud" as const;
   readonly model: string;
   readonly modelName: string;
 

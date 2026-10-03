@@ -39,7 +39,7 @@ function proposal(status: ActionProposal["status"] = "awaiting_consent"): Action
   };
 }
 
-function command(runtime: CoreRuntime, commandId: string, decision: "approve" | "decline"): CommandEnvelope {
+function command(runtime: CoreRuntime, commandId: string, decision: "approve" | "decline", proposalId = stopRequest.proposalId): CommandEnvelope {
   return {
     protocolVersion: 1,
     kind: "command",
@@ -49,7 +49,7 @@ function command(runtime: CoreRuntime, commandId: string, decision: "approve" | 
     traceId: `trace-${commandId}`,
     sentAt: 2,
     sender: { displayId: "center-main", deviceId: "center-device" },
-    command: { type: "action.consent", payload: { proposalId: stopRequest.proposalId, decision } },
+    command: { type: "action.consent", payload: { proposalId, decision } },
   };
 }
 
@@ -95,7 +95,33 @@ test("non-critical proposals defer without load or at HIGH/CRITICAL, and route a
   }
 });
 
-test("consent revalidation only executes deferred work after LOW/NORMAL and existing consent", () => {
+test("HMI telemetry and cognitive-load commands retain simulated provenance", () => {
+  const runtime = new CoreRuntime({ registry });
+  const envelope = (commandId: string, command: CommandEnvelope["command"]): CommandEnvelope => ({
+    protocolVersion: 1,
+    kind: "command",
+    messageId: `message-${commandId}`,
+    commandId,
+    sessionId: runtime.sessionId,
+    traceId: `trace-${commandId}`,
+    sentAt: 10,
+    sender: { displayId: "center-main", deviceId: "center-device" },
+    command,
+  });
+
+  runtime.submitCommand(envelope("sim-speed", { type: "vehicle.telemetry.report", payload: { vehicle: { speedKph: 24 } } }));
+  runtime.submitCommand(envelope("sim-load", { type: "driver.cognitive_load.report", payload: { level: "high", timestamp: 11, confidence: 1 } }));
+
+  const signals = runtime.eventBus.eventsAfter(0)
+    .filter((event) => event.type === "context.signal.received")
+    .map((event) => event.payload.signal);
+  assert.deepEqual(signals.map((signal) => [signal.type, signal.source]), [
+    ["vehicle.telemetry", "simulated"],
+    ["driver.cognitive_load", "simulated"],
+  ]);
+});
+
+test("consent is invalidated while deferred and revalidated work requires fresh consent", () => {
   for (const releaseLevel of ["low", "normal"] as const) {
     const runtime = new CoreRuntime({ registry });
     reportLoad(runtime, "normal");
@@ -108,12 +134,38 @@ test("consent revalidation only executes deferred work after LOW/NORMAL and exis
     assert.equal(approval.status, "RECEIVED");
     assert.equal(runtime.getState().journey.stops.length, 0);
     assert.equal(runtime.getState().activeProposals[0]?.status, "deferred");
-    assert.equal(runtime.getState().activeProposals[0]?.consentGranted, true);
+    assert.equal(runtime.getState().activeProposals[0]?.consentGranted, false);
 
     reportLoad(runtime, releaseLevel);
+    assert.equal(runtime.getState().activeProposals[0]?.status, "awaiting_consent");
+    assert.equal(runtime.getState().journey.stops.length, 0);
+    const renewedApproval = runtime.submitCommand(command(runtime, `renew-${releaseLevel}`, "approve"));
+    assert.equal(renewedApproval.status, "RECEIVED");
     assert.equal(runtime.getState().journey.stops.length, 1);
     assert.equal(runtime.getState().activeProposals[0]?.status, "completed");
   }
+});
+
+test("failed durable task creation cannot leave an approved proposal executing without a task", () => {
+  const runtime = new CoreRuntime({ registry, persistTasks: () => { throw new Error("DISK_FULL"); } });
+  reportLoad(runtime, "normal");
+  const proposalRequest: ActionProposalRequest = {
+    proposalId: "persisted-information-action",
+    kind: "SHOW_INFORMATION",
+    summary: "Show destination detail",
+    targetRole: "center",
+    priority: "normal",
+    requiresConsent: true,
+    payload: {},
+  };
+  const created = runtime.proposeAction(proposalRequest, "rear", "proposal-trace");
+  assert.equal(created.proposal.status, "awaiting_consent");
+
+  const receipt = runtime.submitCommand(command(runtime, "approval-write-through-failure", "approve", proposalRequest.proposalId));
+  assert.equal(receipt.status, "REJECTED");
+  assert.equal(receipt.reasonCode, "TASK_START_NOT_PERSISTED");
+  assert.equal(runtime.getState().activeProposals[0]?.status, "rejected");
+  assert.equal(runtime.getState().activeTasks.length, 0);
 });
 
 test("missing-load deferrals release to Center consent at LOW/NORMAL without changing Journey", () => {

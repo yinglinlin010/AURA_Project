@@ -12,6 +12,7 @@ import { SqliteJourneyStore } from "../../../adapters/persistence/sqlite-journey
 import { ACTIVE_JOURNEY_ID, persistJourney, restoreJourney } from "./journey-persistence.js";
 import { brandFromEnvironment } from "../../../packages/core-domain/src/brand.js";
 import { HttpConnectivityMonitor } from "../../../adapters/connectivity/http-connectivity-monitor.js";
+import { SqliteTaskStore } from "../../../adapters/persistence/sqlite-task-store.js";
 
 function loadRegistry(): DisplayRegistry {
   const configPath = process.env.AURA_DISPLAY_REGISTRY ??
@@ -25,10 +26,13 @@ async function main(): Promise<void> {
   const brand = brandFromEnvironment(process.env);
   const registry = loadRegistry();
   const journeys = new SqliteJourneyStore();
+  const tasks = new SqliteTaskStore();
   const runtime = new CoreRuntime({
     registry,
     initialJourney: restoreJourney(journeys.get(ACTIVE_JOURNEY_ID)),
     persistJourney: (journey) => persistJourney(journeys, ACTIVE_JOURNEY_ID, journey),
+    initialTasks: tasks.get(),
+    persistTasks: (activeTasks) => tasks.save(activeTasks),
   });
   // The deterministic demo is deliberately opt-in and always reports simulated fixture evidence.
   const journeyRecommendations = process.env.AURA_SIMULATED_JOURNEY_RECOMMENDATION === "true"
@@ -73,6 +77,7 @@ async function main(): Promise<void> {
     } finally {
       if (externalAdapters) externalAdapters.close();
       else journeys.close();
+      tasks.close();
       process.exit(0);
     }
   };

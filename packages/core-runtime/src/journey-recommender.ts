@@ -45,6 +45,9 @@ export interface JourneyOption {
   walkingDistanceKm?: JourneyEvidence<number>;
   preferenceFit?: JourneyEvidence<number>; // 0–1
   nearbyFollowUps?: JourneyEvidence<JourneyFollowUp[]>;
+  /** Reported place access facts; never infer a passenger's mobility needs from who they are. */
+  passengerDropoff?: JourneyEvidence<{ access: "designated" | "curbside" | "street" | "unknown"; distanceToEntranceMeters?: number }>;
+  nearbyCharging?: JourneyEvidence<Array<{ label: string; availability: "available" | "limited" | "unknown"; walkingDistanceKm: number; powerKw?: number }>>;
 }
 
 export interface JourneyAnchor {
@@ -95,7 +98,7 @@ const usable = <T>(e: JourneyEvidence<T> | undefined, now: number): e is Journey
 const numeric = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
 /** Deterministic whole-journey ranking. Missing/stale inputs contribute no score and are called out. */
-export function scoreJourneyOptions(options: JourneyOption[], now = Date.now()): JourneyRecommendation {
+export function scoreJourneyOptions(options: JourneyOption[], now = Date.now(), preferences: { prioritizePassengerDropoff?: boolean } = {}): JourneyRecommendation {
   const scored: ScoredOption[] = options.map((option) => {
     let score = 50;
     let used = 0;
@@ -125,6 +128,25 @@ export function scoreJourneyOptions(options: JourneyOption[], now = Date.now()):
     apply(option.walkingDistanceKm, 5, (v) => 1 - numeric(v, 0, 5) / 2.5, (v) => `${numeric(v, 0, 5)} km walking distance.`);
     apply(option.preferenceFit, 8, (v) => (numeric(v, 0, 1) - 0.5) * 2, (v) => `Preference-fit score ${numeric(v, 0, 1).toFixed(2)}/1.`);
     apply(option.nearbyFollowUps, 5, (v) => numeric(v.length, 0, 3) / 3, (v) => `${v.length} nearby follow-up option(s).`);
+    if (preferences.prioritizePassengerDropoff) {
+      apply(option.passengerDropoff, 8, (v) => {
+        const access = v.access === "designated" ? 1 : v.access === "curbside" ? 0.6 : v.access === "street" ? 0.2 : 0;
+        const entranceDistance = v.distanceToEntranceMeters === undefined ? 0.5 : 1 - numeric(v.distanceToEntranceMeters, 0, 500) / 500;
+        return access * 0.5 + entranceDistance * 0.5;
+      }, (v) => {
+        const distance = v.distanceToEntranceMeters === undefined ? "" : `, ${Math.round(v.distanceToEntranceMeters)} m from entrance`;
+        return `Passenger drop-off: ${v.access}${distance}.`;
+      });
+    }
+    apply(option.nearbyCharging, 8, (stations) => {
+      const available = stations.filter((station) => station.availability === "available");
+      if (available.length === 0) return stations.some((station) => station.availability === "limited") ? 0.2 : -0.2;
+      const nearest = Math.min(...available.map((station) => station.walkingDistanceKm));
+      return 1 - numeric(nearest, 0, 5) / 2.5;
+    }, (stations) => {
+      const available = stations.filter((station) => station.availability === "available").sort((a, b) => a.walkingDistanceKm - b.walkingDistanceKm)[0];
+      return available ? `Nearby charging: ${available.label}, ${available.walkingDistanceKm} km away.` : `Nearby charging is ${stations.some((station) => station.availability === "limited") ? "limited" : "unknown or unavailable"}.`;
+    });
     return { option, score, rationale, used, simulated };
   }).sort((a, b) => b.score - a.score || a.option.placeId.localeCompare(b.option.placeId));
 
@@ -149,7 +171,7 @@ export function scoreJourneyOptions(options: JourneyOption[], now = Date.now()):
     selected: best.option,
     score: best.score,
     simulated: scored.some((item) => item.simulated),
-    evidenceCoverage: best.used / 11,
+    evidenceCoverage: best.used / 13,
     rationale,
     alternatives: scored.slice(1).map(({ option, score, rationale }) => ({ placeId: option.placeId, label: option.label, score, rationale, evidence: evidenceSummary(option, now) })),
   };
@@ -229,7 +251,11 @@ export async function recommendWholeJourney(input: {
   );
   if (eligibleOptions.length === 0) return abstain("NO_CANDIDATE_WITH_FRESH_ROUTE_DETOUR_EVIDENCE");
 
-  const recommendation = scoreJourneyOptions(eligibleOptions, now);
+  const dropoffPreference = message.requestText;
+  const noDropoffPreference = /(?:entrance|drop[- ]?off).{0,48}(?:not important|doesn't matter|no special preference)|(?:不需要|不用|不重要).{0,24}(?:入口|下車|下车)/i.test(dropoffPreference);
+  const recommendation = scoreJourneyOptions(eligibleOptions, now, {
+    prioritizePassengerDropoff: !noDropoffPreference && /(?:entrance|drop[- ]?off).{0,48}(?:important|matters|priorit|closer)|(?:重要|重視|靠近).{0,24}(?:入口|下車|下车)/i.test(dropoffPreference),
+  });
   if (!recommendation.selected || recommendation.score === null || !Number.isFinite(recommendation.score)) {
     return abstain("NO_FRESH_DECISION_EVIDENCE");
   }
@@ -356,6 +382,14 @@ function validOptionEvidenceValues(option: JourneyOption, now: number): boolean 
     (!Array.isArray(option.nearbyFollowUps.value) || option.nearbyFollowUps.value.some((item) =>
       !isRecord(item) || !validText(item.label, 256) || !validText(item.category, 128) ||
       !usable(item.walkingDistanceKm, now) || !Number.isFinite(item.walkingDistanceKm.value) || item.walkingDistanceKm.value < 0))) return false;
+  if (option.passengerDropoff && usable(option.passengerDropoff, now) &&
+      (!isRecord(option.passengerDropoff.value) || !["designated", "curbside", "street", "unknown"].includes(option.passengerDropoff.value.access) ||
+       (option.passengerDropoff.value.distanceToEntranceMeters !== undefined && (!Number.isFinite(option.passengerDropoff.value.distanceToEntranceMeters) || option.passengerDropoff.value.distanceToEntranceMeters < 0)))) return false;
+  if (option.nearbyCharging && usable(option.nearbyCharging, now) &&
+      (!Array.isArray(option.nearbyCharging.value) || option.nearbyCharging.value.length > 20 || option.nearbyCharging.value.some((station) =>
+        !isRecord(station) || !validText(station.label, 128) || !["available", "limited", "unknown"].includes(station.availability) ||
+        !Number.isFinite(station.walkingDistanceKm) || station.walkingDistanceKm < 0 ||
+        (station.powerKw !== undefined && (!Number.isFinite(station.powerKw) || station.powerKw < 0))))) return false;
   return true;
 }
 

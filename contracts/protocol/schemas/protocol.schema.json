@@ -327,6 +327,75 @@
         }
       ]
     },
+    "taskLifecycleCommand": {
+      "oneOf": [
+        {
+          "type": "object", "required": ["type", "payload"],
+          "properties": { "type": { "const": "task.start" }, "payload": {
+            "type": "object", "required": ["taskId", "priority"],
+            "properties": {
+              "taskId": { "$ref": "#/definitions/id" },
+              "priority": { "enum": ["primary", "secondary", "critical"] },
+              "goal": { "type": "string", "minLength": 1, "maxLength": 1000 },
+              "conditions": { "type": "array", "maxItems": 20, "items": { "$ref": "#/definitions/taskCondition" } }
+            }, "additionalProperties": false
+          } }, "additionalProperties": false
+        },
+        {
+          "type": "object", "required": ["type", "payload"],
+          "properties": { "type": { "const": "task.update" }, "payload": {
+            "type": "object", "required": ["taskId", "expectedVersion"],
+            "properties": {
+              "taskId": { "$ref": "#/definitions/id" }, "expectedVersion": { "type": "integer", "minimum": 1 },
+              "goal": { "type": "string", "minLength": 1, "maxLength": 1000 },
+              "conditions": { "type": "array", "maxItems": 20, "items": { "$ref": "#/definitions/taskCondition" } },
+              "currentStep": { "type": "string", "minLength": 1, "maxLength": 500 },
+              "pauseReason": { "type": "string", "minLength": 1, "maxLength": 500 }
+            }, "additionalProperties": false
+          } }, "additionalProperties": false
+        },
+        {
+          "type": "object", "required": ["type", "payload"],
+          "properties": { "type": { "const": "task.action" }, "payload": {
+            "type": "object", "required": ["taskId", "expectedVersion", "actionId", "status"],
+            "properties": {
+              "taskId": { "$ref": "#/definitions/id" }, "expectedVersion": { "type": "integer", "minimum": 1 },
+              "actionId": { "$ref": "#/definitions/id" },
+              "status": { "enum": ["pending", "running", "paused", "succeeded", "failed", "cancelled", "unknown"] },
+              "reasonCode": { "type": "string", "minLength": 1, "maxLength": 128 }
+            }, "additionalProperties": false
+          } }, "additionalProperties": false
+        },
+        {
+          "type": "object", "required": ["type", "payload"],
+          "properties": { "type": { "const": "task.cancel" }, "payload": {
+            "type": "object", "required": ["taskId", "expectedVersion"],
+            "properties": {
+              "taskId": { "$ref": "#/definitions/id" }, "expectedVersion": { "type": "integer", "minimum": 1 },
+              "reasonCode": { "type": "string", "minLength": 1, "maxLength": 128 }
+            }, "additionalProperties": false
+          } }, "additionalProperties": false
+        },
+        {
+          "type": "object", "required": ["type", "payload"],
+          "properties": { "type": { "const": "task.resume" }, "payload": {
+            "type": "object", "required": ["taskId", "expectedVersion"],
+            "properties": { "taskId": { "$ref": "#/definitions/id" }, "expectedVersion": { "type": "integer", "minimum": 1 } },
+            "additionalProperties": false
+          } }, "additionalProperties": false
+        }
+      ]
+    },
+    "taskLifecycleMessage": {
+      "type": "object", "required": ["kind", "protocolVersion", "commandId", "sessionId", "traceId", "sentAt", "sender", "command"],
+      "properties": {
+        "kind": { "const": "task.command" }, "protocolVersion": { "$ref": "#/definitions/protocolVersion" },
+        "commandId": { "$ref": "#/definitions/id" }, "sessionId": { "$ref": "#/definitions/id" },
+        "traceId": { "$ref": "#/definitions/id" }, "sentAt": { "type": "integer", "minimum": 0 },
+        "sender": { "type": "object", "required": ["deviceId", "displayId"], "properties": { "deviceId": { "$ref": "#/definitions/id" }, "displayId": { "$ref": "#/definitions/id" } }, "additionalProperties": false },
+        "command": { "$ref": "#/definitions/taskLifecycleCommand" }
+      }, "additionalProperties": false
+    },
     "commandEnvelope": {
       "type": "object",
       "required": [
@@ -512,6 +581,9 @@
       "oneOf": [
         {
           "$ref": "#/definitions/registerMessage"
+        },
+        {
+          "$ref": "#/definitions/taskLifecycleMessage"
         },
         {
           "type": "object",
@@ -801,7 +873,8 @@
           "enum": [
             "running",
             "interrupted",
-            "completed"
+            "completed",
+            "cancelled"
           ]
         },
         "startedAt": {
@@ -811,7 +884,39 @@
         "interruptionReason": {
           "type": "string",
           "minLength": 1
-        }
+        },
+        "version": { "type": "integer", "minimum": 1 },
+        "goal": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "conditions": { "type": "array", "maxItems": 20, "items": { "$ref": "#/definitions/taskCondition" } },
+        "currentStep": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "pauseReason": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "actionRecords": { "type": "array", "maxItems": 50, "items": { "$ref": "#/definitions/taskActionRecord" } }
+      },
+      "additionalProperties": false
+    },
+    "taskCondition": {
+      "type": "object",
+      "required": ["key", "classification"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "classification": { "enum": ["confirmed", "inferred", "unknown"] },
+        "value": { "type": "string", "maxLength": 500 },
+        "source": { "enum": ["sensor", "simulated", "api", "derived", "cache"] },
+        "observedAt": { "type": "integer", "minimum": 0 },
+        "expiresAt": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "taskActionRecord": {
+      "type": "object",
+      "required": ["actionId", "idempotencyKey", "status", "startedAt", "updatedAt"],
+      "properties": {
+        "actionId": { "$ref": "#/definitions/id" },
+        "idempotencyKey": { "$ref": "#/definitions/id" },
+        "status": { "enum": ["pending", "running", "paused", "succeeded", "failed", "cancelled", "unknown"] },
+        "startedAt": { "type": "integer", "minimum": 0 },
+        "updatedAt": { "type": "integer", "minimum": 0 },
+        "reasonCode": { "type": "string", "minLength": 1, "maxLength": 128 }
       },
       "additionalProperties": false
     },
@@ -1599,6 +1704,26 @@
         },
         {
           "type": "object",
+          "required": ["eventId", "sequence", "sessionId", "traceId", "commandId", "occurredAt", "type", "payload"],
+          "properties": {
+            "eventId": { "$ref": "#/definitions/id" },
+            "sequence": { "type": "integer", "minimum": 1 },
+            "sessionId": { "$ref": "#/definitions/id" },
+            "traceId": { "$ref": "#/definitions/id" },
+            "commandId": { "type": ["string", "null"], "maxLength": 128 },
+            "occurredAt": { "type": "integer", "minimum": 0 },
+            "type": { "const": "task.updated" },
+            "payload": {
+              "type": "object",
+              "required": ["task"],
+              "properties": { "task": { "$ref": "#/definitions/activeTask" } },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "required": [
             "eventId",
             "sequence",
@@ -1659,6 +1784,26 @@
         },
         {
           "type": "object",
+          "required": ["eventId", "sequence", "sessionId", "traceId", "commandId", "occurredAt", "type", "payload"],
+          "properties": {
+            "eventId": { "$ref": "#/definitions/id" },
+            "sequence": { "type": "integer", "minimum": 1 },
+            "sessionId": { "$ref": "#/definitions/id" },
+            "traceId": { "$ref": "#/definitions/id" },
+            "commandId": { "type": ["string", "null"], "maxLength": 128 },
+            "occurredAt": { "type": "integer", "minimum": 0 },
+            "type": { "const": "task.resumed" },
+            "payload": {
+              "type": "object",
+              "required": ["taskId"],
+              "properties": { "taskId": { "$ref": "#/definitions/id" } },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "required": [
             "eventId",
             "sequence",
@@ -1706,6 +1851,29 @@
                 "taskId": {
                   "$ref": "#/definitions/id"
                 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["eventId", "sequence", "sessionId", "traceId", "commandId", "occurredAt", "type", "payload"],
+          "properties": {
+            "eventId": { "$ref": "#/definitions/id" },
+            "sequence": { "type": "integer", "minimum": 1 },
+            "sessionId": { "$ref": "#/definitions/id" },
+            "traceId": { "$ref": "#/definitions/id" },
+            "commandId": { "type": ["string", "null"], "maxLength": 128 },
+            "occurredAt": { "type": "integer", "minimum": 0 },
+            "type": { "const": "task.cancelled" },
+            "payload": {
+              "type": "object",
+              "required": ["taskId", "reasonCode"],
+              "properties": {
+                "taskId": { "$ref": "#/definitions/id" },
+                "reasonCode": { "type": "string", "minLength": 1 }
               },
               "additionalProperties": false
             }
@@ -2158,7 +2326,7 @@
         "score": {"type": "number"},
         "simulated": {"type": "boolean"},
         "evidenceCoverage": {"type": "number", "minimum": 0, "maximum": 1},
-        "rationale": {"type": "array", "minItems": 1, "maxItems": 12, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+        "rationale": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
         "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/journeyEvidenceSummary"}},
         "wholeJourneyContext": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/definitions/journeyEvidenceSummary"}},
         "alternatives": {"type": "array", "maxItems": 50, "items": {"$ref": "#/definitions/journeyRecommendationOptionSummary"}}
