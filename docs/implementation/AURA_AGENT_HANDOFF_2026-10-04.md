@@ -17,18 +17,16 @@
 
 ## 已核對 Git 狀態
 
-2026-10-04 透過 `git status`、`git log`、`git ls-remote` 及已登入的 `gh api` 唯讀確認：
+最新整合狀態（2026-10-04）：
 
 - 本地分支：`codex/aura-v1-integration`。
-- 本地 HEAD、GitHub main、整合分支、remote HEAD：`7808eb3dc83a2c15847dc7d633536cb503951dde`。
-- HEAD 提交時間：2026-10-03 07:48:19 +0800。
+- 本地分支：`codex/aura-v1-integration`；最新已推送 HEAD：`c603246334638b401d71fd46eab584119adcae24`。本地分支與 `origin/codex/aura-v1-integration` 一致；不可推論它與 main 相同。
+- 目前整合提交已包含先前 voice/runtime 變更，不能再描述為未提交。
 - HMI 交接分支 `codex/cluster-reference-handoff-20261003`：`56cfffc451071366d5157c86385a9033f622a03b`。
 - [PR #1](https://github.com/yinglinlin010/AURA_Project/pull/1) 為 open，`merged: false`，head 為上述交接 SHA。
 - 本地及祖先未找到實際 AGENTS.md，採用使用者在對話提供的風險邊界。交接分支有 AGENTS.md，尚未合併，不能假稱本地已存在。
 
-開始時已有修改：`adapters/voice/{gemini-live-voice-adapter.ts,index.ts,mock-gemini-voice-streaming-adapter.ts}`、`apps/core-host/src/intelligence.ts`、`apps/core-host/test/{gemini-live-connect.test.ts,hmi-gateway-mock-voice.test.ts}`、`docs/implementation/AURA_COMPETITION_V1_REQUIREMENTS_AUDIT.md`、`ml/aura_distill/data/dataset_cli.py`、`packages/core-runtime/src/{tracing.ts,voice-runtime.ts}`。
-
-已有未追蹤檔：`Ting-Ting`、`adapters/voice/local-whisper-voice-adapter.ts`、`apps/core-host/test/{intelligence-local-mode.test.ts,local-whisper-voice-adapter.test.ts}`、`docs/implementation/LOCAL_VOICE_ADAPTER.md`、`run_review.sh`。勿刪除或覆寫。
+歷史基線記錄過的 voice/runtime 檔案已納入上述整合提交。當前使用者未追蹤檔 `Ting-Ting` 和 `run_review.sh` 必須保留、不覆寫或納入提交。Agy 文件稽核另產生未追蹤 review artifact，整合前先檢查其內容；不得把它誤認為使用者原有文件。
 
 ## 已確認的產品方向
 
@@ -83,7 +81,7 @@ gh api 'repos/yinglinlin010/AURA_Project/contents/AURA_UI_UX_Handoff/AURA_Cluste
 
 另外發現：Console speed/load 標示模擬，但 `core-runtime.ts:457,473` 将來源標為 sensor。第 1 階段記錄缺口，不偷偷修程式。
 
-歷史證據：`docs/implementation/evidence/scenario-reliability-2026-10-03.json` 記錄 revision `ddde54ae…`、9 YAML × 3 = 27 runs／0 failed，只能證明 local simulation fresh-process reproducibility。`LOCAL_VOICE_ADAPTER.md:39` 有 whisper.cpp 1.9.4/base + macOS TTS 的生成音訊 smoke（首字辨識錯、132340 bytes output），不等於真實 microphone／speaker 或準確率量測。本次未執行任何測試／provider／畫面驗證。
+歷史證據：`docs/implementation/evidence/scenario-reliability-2026-10-03.json` 記錄 revision `ddde54ae…`、9 YAML × 3 = 27 runs／0 failed，只能證明 local simulation fresh-process reproducibility。`LOCAL_VOICE_ADAPTER.md:39` 有 whisper.cpp 1.9.4/base + macOS TTS 的生成音訊 smoke（首字辨識錯、132340 bytes output），不等於真實 microphone／speaker 或準確率量測。以上是先前盤點留下的歷史證據，不代表本輪未驗證。
 
 ## 初次交接的第 2 階段建議（歷史方案，已開始實作）
 
@@ -101,8 +99,10 @@ gh api 'repos/yinglinlin010/AURA_Project/contents/AURA_UI_UX_Handoff/AURA_Cluste
 - **HMI 任務隱私：** Center 的 task snapshot 可見目標、條件、步驟、暫停原因與 action ledger；其他角色的快照、更新 fanout 與 replay 只見狀態摘要，interrupt/cancel reason 降為 `TASK_STATE_CHANGED`。測試涵蓋五角色、重播與重連快照。
 - **訊號來源：** Developer/Simulator Console 的 vehicle telemetry 與 cognitive-load report 現由 Runtime 標為 `simulated`；真實感測資料必須由可信 adapter ingestion，不可經一般 HMI 命令自稱為 sensor。
 - **語音與資料審查：** 保留既有 local Whisper adapter 與 voice routing／trace 改動；dataset review CLI 加入退出與抽樣雙人複審。唯讀 agent 審查確認 local mode 不在失敗時切換 cloud/mock；adapter 使用 `shell: false`、有 subprocess timeout 與輸出上限、在 cleanup 路徑移除暫存目錄。語音測試是 fake process／生成音訊的限定證據，未驗證實車艙麥克風與播放；資料人工內容／權利覆核仍待進行。
-- **本輪驗證（2026-10-04 更新）：** 最終 `npm test` 通過 111 個 Node tests、3 個 Python tests 與 evaluation registry validation；根 TypeScript build 與 `apps/web-simulator` build 均通過。`npm run scenario:reliability -- --repetitions 3 --report /private/tmp/aura-v1-scenario-report.json` 通過 9 個 scenarios × 3 次 fresh-process replay（27 runs，0 failures）。這些是本地合約／模擬檢查，不是視覺驗收、真實來源、實體裝置或效果量測證據。
+- **本輪驗證（2026-10-04 更新）：** `npm test` 通過 111 個 Node tests、3 個 Python tests 與 evaluation registry validation；根 TypeScript build 與 `apps/web-simulator` build 均通過。`npm run scenario:reliability -- --repetitions 3 --report /private/tmp/aura-v1-scenario-report-20261004.json` 通過 9 個 scenarios × 3 次 fresh-process replay（27 runs，0 failures）。Chrome 本地渲染檢查確認 Cluster 的 RPM／Power 模擬標籤、四輪獨立示例、溫度未知標示、Gateway disconnected 呈現，以及五個邏輯螢幕狀態列均存在；該畫面是單一瀏覽器模擬器，不代表五台獨立裝置。這些證據不涵蓋真實來源、實體裝置或效果量測。
+- **HMI 規則補正（2026-10-04）：** Cluster 使用四筆分離、明確標記的模擬輪胎讀值；RPM／Power 標為示例，溫度意義未定時不編造數值；路面標線隨模擬速度移動，零速、暫停與 `prefers-reduced-motion` 會停止動畫。中控恢復 35/65 比例，高負荷保留 RPM／Power 車況讀值。
+- **四螢幕規則補正（2026-10-04）：** Rear 停靠提案經 Gateway 送往 Center Action Gate 並要求駕駛同意；Window 的示例狀態由 DOM 呈現且圖片只作環境素材；Passenger 顯示離線／降級狀態；長旅程停靠採最新一站加可展開舊站摘要；移除面板厚陰影。這些仍是瀏覽器模擬，尚未證明獨立裝置。
 - **新增整合：** HMI Gateway 對 proposal live fanout、replay 與 snapshot 做 requester／target 角色投影；乘員接收提案仍需要 protocol 未提供的明確 handoff grant，Runtime/EventBus 內部也仍保存完整 proposal。Center-only task command 已接上生命週期 API，無 revalidation 證據時拒絕 resume。Web Simulator 新增 Center 任務控制與 action ledger 檢視。Scenario DSL 在同一 Runtime 中覆蓋 task start、safety interrupt、unknown reconciliation、模擬 revalidation resume 與 completion/idempotency；revalidation fixture 僅限 simulator。
-- **多 agent 進度：** Orca Run `run_16a1c0a13049` 的 Antigravity 語音 adapter 審查已完成，報告位於本機 Gemini scratch path（未納入 repo）；另兩個 Antigravity 任務正在新增 simulation-only assistance timing 預覽與更新此實作稽核文件。完成後須檢視它們的 diff，並重新跑受影響 build／測試。
+- **多 agent 進度：** Orca Run `run_16a1c0a13049` 的既有實作 agent 已完成；本輪 Agy 的 HMI 與文件唯讀稽核已檢視並處理有效發現。兩個派發均已完成、terminal 已釋出、delivery 已確認。Run 內更早的已完成歷史任務不代表尚有實作 agent 執行中。
 
 仍待具體證據或外部決定：host 可用的 fresh revalidation data source、runtime/HMI 端有權限的協助時機資料來源、跨重啟追問偏好、真實麥克風與播放中打斷、攝影機 observable cues、live 上下車／充電與地圖資料、既有自動停車系統能力及結果介面、真實斷網／provider 恢復、獨立呈現客戶端及 Android／AI Box／目標設備、正式 benchmark 與使用者比較。安全警告解除／替換語意仍需明確產品決定；資料內容／權利人工批准、使用者關聯資料保存與刪除政策，以及任何部署、對外發布或憑證變更，仍遵守各自批准界線。

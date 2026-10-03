@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import clusterReference from '../../../AURA_UI_UX_Handoff/images/01_cluster_display_final.jpg';
 import passengerReference from '../../../AURA_UI_UX_Handoff/images/03_passenger_display_final.jpg';
 import windowReference from '../../../AURA_UI_UX_Handoff/images/05_interactive_window_final.jpg';
 import { resolveBrand } from '../../../packages/core-domain/src/brand';
@@ -56,17 +57,47 @@ function ScreenHeading({ title, details, gatewayStatus, presence, windowExamples
   return <div className="screen-heading"><h1>{title}</h1><span className="screen-heading-meta"><span>{details} · Gateway {gatewayStatus}</span><PresenceBadge presence={presence}/>{windowExamples && <small className="window-example-label">SIMULATED EXAMPLES</small>}</span></div>;
 }
 
-function Cluster({ speedKph, warning, presentation }: { speedKph: number; warning: SharedSafetyWarning | null; presentation: ReturnType<typeof resolvePresentation> }) {
+const TIRE_PRESSURE_EXAMPLES = [
+  { position: 'FL', pressureBar: 2.4 },
+  { position: 'FR', pressureBar: 2.4 },
+  { position: 'RL', pressureBar: 2.5 },
+  { position: 'RR', pressureBar: 2.5 },
+] as const;
+
+function Gauge({ type }: { type: 'rpm' | 'power' }) {
+  const start = type === 'rpm' ? 135 : 135;
+  const end = type === 'rpm' ? 285 : 405;
+  const point = (radius: number, angle: number) => {
+    const radians = (angle * Math.PI) / 180;
+    return { x: 100 + radius * Math.cos(radians), y: 100 + radius * Math.sin(radians) };
+  };
+  const first = point(76, start);
+  const last = point(76, end);
+  const largeArc = end - start > 180 ? 1 : 0;
+  const marks = type === 'rpm' ? Array.from({ length: 8 }, (_, index) => ({ angle: start + ((end - start) * index) / 7, label: String(index) })) : [
+    { angle: start, label: '0' }, { angle: (start + end) / 2, label: '50' }, { angle: end, label: '100' },
+  ];
+  return <svg className={`instrument-gauge ${type}`} viewBox="0 0 200 200" aria-hidden="true">
+    <path className="gauge-track" d={`M ${first.x} ${first.y} A 76 76 0 ${largeArc} 1 ${last.x} ${last.y}`}/>
+    {marks.map(({ angle, label }) => {
+      const outer = point(82, angle); const inner = point(68, angle); const labelPoint = point(94, angle);
+      return <g key={`${angle}-${label}`}><path className="gauge-tick" d={`M ${inner.x} ${inner.y} L ${outer.x} ${outer.y}`}/><text x={labelPoint.x} y={labelPoint.y} textAnchor="middle" dominantBaseline="middle">{label}</text></g>;
+    })}
+  </svg>;
+}
+
+function Cluster({ speedKph, warning, presentation, motionPaused }: { speedKph: number; warning: SharedSafetyWarning | null; presentation: ReturnType<typeof resolvePresentation>; motionPaused: boolean }) {
   const densityClass = presentation.informationDensity === 'reduced' ? 'load-reduced' : presentation.informationDensity === 'safety_only' ? 'load-critical' : '';
+  const markerDuration = `${Math.max(250, 3000 / Math.max(1, speedKph))}ms`;
   return <section className={`device cluster-device ${densityClass} ${warning ? 'safety-active' : ''}`} aria-label="Cluster display preview">
-    <div className="cluster-head"><span>14:38&nbsp;&nbsp; 21°C</span><span className="drive-mode">DRIVE</span><span className="indicator-lights"><i>◉</i><b>●</b></span></div>
+      <div className="cluster-head"><span>14:38&nbsp;&nbsp; 21°C</span><span className="drive-mode">DRIVE</span><span className="indicator-lights" style={{ backgroundImage: `url(${clusterReference})` }} role="img" aria-label="Illustrative reference headlight and seatbelt telltales" title="Illustrative reference telltales"/></div>
     {warning && <div className="cluster-safety-warning" role="alert" aria-live="assertive"><b>CRITICAL SAFETY WARNING</b><span>Immediate safety condition · {warning.source === 'simulated' ? 'SIMULATED' : warning.source.toUpperCase()}</span></div>}
     <div className="cluster-main">
       <aside className="trip-readout"><p><span>Trip</span><b>24.8 km</b></p><p><span>Avg</span><b>16.1 kWh/100km</b></p><p><span>Time</span><b>0:42h</b></p><p><span>Range</span><b>412 km</b></p></aside>
-      <div className="rpm-gauge"><div className="gauge-arc"/><div className="gauge-ticks">1&nbsp;&nbsp;&nbsp; 2&nbsp;&nbsp;&nbsp; 3&nbsp;&nbsp;&nbsp; 4&nbsp;&nbsp;&nbsp; 5&nbsp;&nbsp;&nbsp; 6&nbsp;&nbsp;&nbsp; 7</div><span className="gauge-label">RPM</span><strong>4200</strong></div>
-      <div className="speed-readout"><strong>{Math.round(speedKph)}</strong><span>km/h</span><div className="road-markers"><i/><b/><em/></div><div className="car-silhouette"><i/><b/><em/></div></div>
-      <div className="power-gauge"><div className="power-arc"/><span className="gauge-label">Power</span><strong>68%</strong></div>
-      <aside className="vehicle-readout"><div className="car-top"><i/><b/><em/></div><span>Tire Pressure</span><b>2.4 / 2.5 bar</b><span>Temp: 19°C</span></aside>
+      <div className="rpm-gauge"><Gauge type="rpm"/><span className="gauge-label">RPM · SIM EXAMPLE</span><strong>4200</strong></div>
+      <div className="speed-readout"><strong>{Math.round(speedKph)}</strong><span>km/h</span><div className="road-markers" style={{ '--marker-duration': markerDuration, '--marker-play-state': speedKph > 0 && !motionPaused ? 'running' : 'paused' } as CSSProperties}><i/><b/><em/></div><div className="car-silhouette-reference" style={{ backgroundImage: `url(${clusterReference})` }} aria-hidden="true"/></div>
+      <div className="power-gauge"><Gauge type="power"/><span className="gauge-label">Power · SIM EXAMPLE</span><strong>68%</strong></div>
+      <aside className="vehicle-readout" aria-label="Four independent simulated tire pressure examples"><div className="car-top-reference" style={{ backgroundImage: `url(${clusterReference})` }} aria-hidden="true"/><div className="tire-pressure-grid">{TIRE_PRESSURE_EXAMPLES.map((tire) => <span key={tire.position}><b>{tire.position}</b> {tire.pressureBar.toFixed(1)} bar</span>)}</div><span className="cluster-example-label">SIMULATED FIXTURES</span><span>Temp · meaning unspecified</span></aside>
     </div>
   </section>;
 }
@@ -172,7 +203,8 @@ function CenterDisplay({ proposals, journeyStops, connection, warning, presentat
         <div className="journey-stop"><time>15:45</time><i/><div><b>Dinner <small>Reservation</small></b><span>Hotel Ambra · 12 min stop</span></div></div>
         <div className="journey-stop traffic"><time>17:15</time><i/><div><b>A–8 Autobahn</b><span>Traffic delay · +8 min</span></div></div>
         {proposalDetailsVisible && stopProposals.filter((item) => item.status === 'awaiting_consent').map((item) => <div className="journey-stop proposed" key={item.proposalId}><time>Shared</time><i/><div><b>{item.summary}</b><span>{proposalStateLabel(item)}</span></div></div>)}
-        {journeyStops.map((stop) => <div className="journey-stop done" key={stop.stopId}><time>Added</time><i/><div><b>{stop.label}</b><span>Confirmed by HMI Gateway</span></div></div>)}
+        {journeyStops.slice(-1).map((stop) => <div className="journey-stop done" key={stop.stopId}><time>Added</time><i/><div><b>{stop.label}</b><span>Confirmed by HMI Gateway</span></div></div>)}
+        {journeyStops.length > 1 && <details className="journey-stop-details"><summary>{journeyStops.length - 1} earlier approved stop{journeyStops.length > 2 ? 's' : ''}</summary><ul>{journeyStops.slice(0, -1).map((stop) => <li key={stop.stopId}>{stop.label}</li>)}</ul></details>}
         <div className="journey-stop destination"><time>19:30</time><i/><div><b>Stuttgart</b><span>Destination · 98 km</span></div></div>
       </div>
     </aside>
@@ -210,10 +242,11 @@ const samplePlaces = [
   { name: 'Terra', style: 'Plant-forward', rating: '4.6', distance: '1.8 mi' },
 ];
 
-function PassengerDisplay({ onProposal, proposal, connection, discovery, searchPlaces, previewRoute }: {
+function PassengerDisplay({ onProposal, proposal, connection, connectivity, discovery, searchPlaces, previewRoute }: {
   onProposal: (place: TransientPlace, route: DiscoveryState['route']['routes'][number], originLabel: string) => void;
   proposal?: SharedProposal;
   connection: { status: string; lastMessage: string };
+  connectivity: GatewayState['connectivity'];
   discovery: DiscoveryState;
   searchPlaces: (slot: 'origin' | 'destination', query: string) => boolean;
   previewRoute: (origin: TransientPlace, destination: TransientPlace) => boolean;
@@ -231,13 +264,14 @@ function PassengerDisplay({ onProposal, proposal, connection, discovery, searchP
   const destinationQuery = [placeQuery.trim(), filterQuery].filter(Boolean).join(' ');
   const originSearchCurrent = Boolean(originQuery.trim()) && searchedOriginQuery === originQuery.trim();
   const destinationSearchCurrent = Boolean(destinationQuery) && searchedDestinationQuery === destinationQuery;
+  const canSearchLive = connection.status === 'connected' && connectivity.mode !== 'offline';
   const originResults = originSearchCurrent ? discovery.origin.results : [];
   const destinationResults = destinationSearchCurrent ? discovery.destination.results : [];
   const currentSelection = origin && destination ? `${origin.placeId}:${destination.placeId}` : '';
   const routeMatchesSelection = Boolean(currentSelection && previewSelection === currentSelection);
   const selectedRoute = routeMatchesSelection ? discovery.route.routes[0] : undefined;
   const illustrativeRows = samplePlaces.map((place, index) => <article key={place.name} className={`place-row place-art-${index + 1}`}><span className="dish-art" aria-hidden="true"><i/><b/><em/></span><span className="place-copy"><b>{place.name}</b><small>{place.style}</small><span>{place.rating} ★ <i>·</i> {place.distance} · SIMULATED</span></span></article>);
-  const canPropose = routeMatchesSelection && discovery.route.status === 'available' && discovery.route.freshness === 'fresh' && Boolean(selectedRoute);
+  const canPropose = connectivity.mode !== 'offline' && routeMatchesSelection && discovery.route.status === 'available' && discovery.route.freshness === 'fresh' && Boolean(selectedRoute);
   const proposalPending = Boolean(proposal && !['declined', 'rejected', 'completed'].includes(proposal.status));
   const searchStatus = (slot: 'origin' | 'destination') => {
     const result = discovery[slot];
@@ -274,18 +308,18 @@ function PassengerDisplay({ onProposal, proposal, connection, discovery, searchP
   return <section className="device passenger-device" aria-label="Front passenger display preview">
     <aside className="discovery-sidebar"><h2>Dining<br/>Guide</h2><h3>Local flavor</h3><p>Search a route origin and dining stop. Vehicle position is not inferred.</p>
       <label className="discovery-field">Route origin<input value={originQuery} maxLength={256} onChange={(event) => { setOriginQuery(event.target.value); setOrigin(null); setSearchedOriginQuery(''); setPreviewSelection(''); }} placeholder="Search a starting place" /></label>
-      <button className="discovery-search-button" onClick={() => { setOrigin(null); setSearchedOriginQuery(originQuery.trim()); setPreviewSelection(''); searchPlaces('origin', originQuery); }} disabled={connection.status !== 'connected' || !originQuery.trim() || discovery.origin.status === 'loading'}>Search origin</button>
+      <button className="discovery-search-button" onClick={() => { if (!canSearchLive) return; setOrigin(null); setSearchedOriginQuery(originQuery.trim()); setPreviewSelection(''); searchPlaces('origin', originQuery); }} disabled={!canSearchLive || !originQuery.trim() || discovery.origin.status === 'loading'}>Search origin</button>
       {originResults.length > 0 && <label className="origin-choice">Choose route origin<select aria-label="Choose route origin" value={origin?.placeId ?? ''} onChange={(event) => { setOrigin(originResults.find((place) => place.placeId === event.target.value) ?? null); setPreviewSelection(''); }}><option value="">Select a search result</option>{originResults.map((place) => <option key={place.placeId} value={place.placeId}>{place.displayName} · API · {place.freshness.toUpperCase()}</option>)}</select></label>}
       {origin && <small className="origin-provenance">{origin.source.toUpperCase()} · {origin.freshness.toUpperCase()} · {formatObserved(origin.observedAt)} · {origin.attribution}</small>}
       {originSearchCurrent && searchStatus('origin') && <p className="discovery-message" role="status">{searchStatus('origin')}</p>}
       <div className="side-rule"/><h3>Filter &amp; search</h3>
       <label className="discovery-field">Dining place<input value={placeQuery} maxLength={232} onChange={(event) => { setPlaceQuery(event.target.value); setDestination(null); setSearchedDestinationQuery(''); setPreviewSelection(''); }} placeholder="Restaurant or destination" /></label>
       <div className="filters" aria-label="Dining search refinement">{filters.map((item) => <button type="button" key={item} className={filter === item ? 'filter selected' : 'filter'} aria-pressed={filter === item} onClick={() => { setFilter(item); if (item !== 'All') setPlaceQuery((current) => current.slice(0, 232)); setDestination(null); setSearchedDestinationQuery(''); setPreviewSelection(''); }}>{item}</button>)}</div>
-      <button className="discovery-search-button" onClick={() => { setDestination(null); setSearchedDestinationQuery(destinationQuery); setPreviewSelection(''); searchPlaces('destination', destinationQuery); }} disabled={connection.status !== 'connected' || !placeQuery.trim() || discovery.destination.status === 'loading'}>Search places</button>
+      <button className="discovery-search-button" onClick={() => { if (!canSearchLive) return; setDestination(null); setSearchedDestinationQuery(destinationQuery); setPreviewSelection(''); searchPlaces('destination', destinationQuery); }} disabled={!canSearchLive || !placeQuery.trim() || discovery.destination.status === 'loading'}>{connectivity.mode === 'offline' ? 'Offline · examples only' : 'Search places'}</button>
     </aside>
-    <div className="discovery-main"><div className="discovery-top"><span>Along your route · Dining · Gateway {connection.status}</span><StatusBar time="16:03"/></div>
+    <div className="discovery-main"><div className="discovery-top"><span>Along your route · Dining · Gateway {connection.status}</span>{connectivity.mode !== 'online' && <span className="passenger-network-state" role="status">{connectivity.mode === 'offline' ? 'OFFLINE · LOCAL EXAMPLES' : 'DEGRADED · CHECK SOURCE FRESHNESS'}</span>}<StatusBar time="16:03"/></div>
       <div className="featured-place"><div className="feature-art"><img src={passengerReference} alt="Illustrative restaurant preview"/><span className="illustrative-photo-tag">Illustrative photo</span><div className="feature-caption"><span>{destination ? `${destination.provider} · API result` : 'Illustrative example'}</span><b>{destination?.displayName ?? 'Aquamarine'}</b><small>{destination?.formattedAddress ?? 'Mediterranean · example content'}</small></div></div>
-        <div className="feature-details"><div><span>{selectedRoute && discovery.route.status === 'available' ? `${(selectedRoute.distanceMeters / 1000).toFixed(1)} km · ${(selectedRoute.durationSeconds / 60).toFixed(0)} min · ${discovery.route.freshness?.toUpperCase()} · observed ${formatObserved(selectedRoute.observedAt)}` : origin && destination && (!origin.location || !destination.location) ? 'Selected result has no route coordinates. Choose another place.' : origin && destination ? `From ${origin.displayName} · ${discovery.route.errorCode ?? 'route preview not yet requested'}` : 'Choose a route origin and a place to preview distance and time.'}</span><b>{origin && destination ? `${origin.displayName} → ${destination.displayName}` : 'Route preview'}</b></div><button type="button" onClick={handleRouteAction} disabled={connection.status !== 'connected' || !origin?.location || !destination?.location || (!canPropose && discovery.route.status === 'loading') || (canPropose && proposalPending)}>{routeButtonLabel}</button></div>
+        <div className="feature-details"><div><span>{connectivity.mode === 'offline' ? 'OFFLINE · Showing local examples only; route lookup is disabled.' : selectedRoute && discovery.route.status === 'available' ? `${(selectedRoute.distanceMeters / 1000).toFixed(1)} km · ${(selectedRoute.durationSeconds / 60).toFixed(0)} min · ${discovery.route.freshness?.toUpperCase()} · observed ${formatObserved(selectedRoute.observedAt)}` : origin && destination && (!origin.location || !destination.location) ? 'Selected result has no route coordinates. Choose another place.' : origin && destination ? `From ${origin.displayName} · ${discovery.route.errorCode ?? 'route preview not yet requested'}` : 'Choose a route origin and a place to preview distance and time.'}</span><b>{origin && destination ? `${origin.displayName} → ${destination.displayName}` : 'Route preview'}</b></div><button type="button" onClick={handleRouteAction} disabled={!canSearchLive || !origin?.location || !destination?.location || (!canPropose && discovery.route.status === 'loading') || (canPropose && proposalPending)}>{routeButtonLabel}</button></div>
         {routeMatchesSelection && (discovery.route.status === 'error' || discovery.route.status === 'unavailable') && <p className="discovery-message route-error" role="status">{discovery.route.status === 'unavailable' ? `Route provider unavailable: ${discovery.route.errorCode ?? 'not configured'}.` : `Route preview failed: ${discovery.route.errorCode ?? 'provider error'}.`}</p>}
         {selectedRoute && discovery.route.status === 'available' && <small className="route-provenance">{discovery.route.provider} · {discovery.route.source?.toUpperCase()} · {discovery.route.freshness?.toUpperCase()} · {discovery.route.attribution} · <a href={discovery.route.attributionUrl ?? undefined} target="_blank" rel="noreferrer">Attribution</a> · review only, journey unchanged</small>}
         {proposal && <p className="passenger-proposal-status">Center proposal: {proposalStateLabel(proposal)}</p>}
@@ -304,7 +338,7 @@ function PassengerDisplay({ onProposal, proposal, connection, discovery, searchP
   </section>;
 }
 
-function RearDisplay() {
+function RearDisplay({ onRestStopProposal, proposal }: { onRestStopProposal: () => void; proposal?: SharedProposal }) {
   const [temperature, setTemperature] = useState(21.5);
   const [playing, setPlaying] = useState(false);
   const [talking, setTalking] = useState(false);
@@ -312,18 +346,19 @@ function RearDisplay() {
   return <section className="device rear-device" aria-label="Rear display preview">
     <div className="rear-tile media-tile"><h3>Media player</h3><div className="media-controls"><button aria-label={playing ? 'Pause' : 'Play'} onClick={() => setPlaying(!playing)}><Icon name={playing ? 'pause' : 'play'} size={23}/></button><button aria-label="Previous track"><Icon name="back" size={25}/></button><button aria-label="Next track"><Icon name="next" size={25}/></button></div><p>Music &amp; audio</p><span className="track-name">{playing ? 'Now Playing' : 'Ready to play'} · The Midnight Echo</span><div className="track-progress"><i className={playing ? 'playing' : ''}/></div></div>
     <div className="rear-tile climate-tile"><h3>Climate control</h3><span className="tile-label">Zone temp</span><div className="temperature"><button aria-label="Lower temperature" onClick={() => setTemperature(Math.max(16, temperature - 0.5))}><Icon name="back"/></button><strong>{temperature.toFixed(1)}°C</strong><button aria-label="Raise temperature" onClick={() => setTemperature(Math.min(28, temperature + 0.5))}><Icon name="next"/></button></div><div className="climate-footer"><span>Fan speed: 3</span><span>Auto</span><button className="sync-button">Sync</button></div></div>
-    <div className="rear-tile communication-tile"><h3>Rear seat comm.</h3><div className="comm-row"><Icon name="phone" size={26}/><div><b>Driver call</b><span>{talking ? 'Calling…' : 'Ready'}</span></div><button onClick={() => setTalking(!talking)}>{talking ? 'End' : 'Talk'}</button></div><div className="comm-row"><Icon name="seat" size={26}/><div><b>Intercom</b><span>Cabin audio</span></div></div></div>
+    <div className="rear-tile communication-tile"><h3>Rear seat comm.</h3><div className="comm-row"><Icon name="phone" size={26}/><div><b>Driver call</b><span>{talking ? 'Simulated request active' : 'No call connected · simulated'}</span></div><button onClick={() => setTalking(!talking)}>{talking ? 'Cancel' : 'Request'}</button></div><div className="comm-row"><Icon name="seat" size={26}/><div><b>Journey request</b><span>{proposal ? proposalStateLabel(proposal) : 'Driver approval required · simulated'}</span></div><button disabled={Boolean(proposal && ['proposed', 'routed', 'awaiting_consent', 'deferred', 'executing'].includes(proposal.status))} onClick={onRestStopProposal}>Propose stop</button></div></div>
     <div className="rear-tile settings-tile"><h3>System settings</h3>{settings ? <div className="settings-options"><button onClick={() => setSettings(false)}>Display &amp; audio</button><button onClick={() => setSettings(false)}>Configuration</button><span>Brightness&nbsp; · &nbsp;70%</span></div> : <><button className="setting-row" onClick={() => setSettings(true)}><Icon name="display" size={25}/><span><b>Display &amp; audio</b><small>Current settings</small></span></button><button className="setting-row" onClick={() => setSettings(true)}><Icon name="settings" size={25}/><span><b>Configuration</b><small>Current settings</small></span></button></>}</div>
   </section>;
 }
 
-function WindowDisplay() {
+function WindowDisplay({ connectivity, presence }: { connectivity: GatewayState['connectivity']; presence: PresenceSnapshot | null }) {
+  const networkLabel = connectivity.mode === 'offline' ? 'OFFLINE · LOCAL' : connectivity.mode === 'degraded' ? 'DEGRADED · SIMULATED' : 'ONLINE · SIMULATED';
   return <section className="device window-device" aria-label="Interactive window preview">
-    <div className="window-scene"><div className="window-photo"><img src={windowReference} alt="Illustrative outside view with simulated time, weather, route, and connectivity details in a thin lower-edge strip"/></div></div>
+    <div className="window-scene"><div className="window-photo"><img src={windowReference} alt="Illustrative outside view; all overlaid values are simulated examples"/></div><div className="window-status" aria-label="Simulated ambient status"><span><b>19:42</b><small>TIME · SIMULATED</small></span><span><b>12°C · RAIN</b><small>WEATHER EXAMPLE</small></span><span><b><Icon name="route" size={12}/>14 KM</b><small>ROUTE EXAMPLE</small></span><span><b>82% · 412 KM</b><small>ENERGY · VEHICLE UNSPECIFIED</small></span><span className="window-network"><b>{networkLabel}</b><small>AURA · {presence?.state ?? 'STATE PENDING'}</small></span></div></div>
   </section>;
 }
 
-function ControlConsole({ speedKph, load, connectivity, connections, status, lastMessage, onSpeed, onLoad, onConnectivity }: { speedKph: number; load: 'low' | 'normal' | 'high' | 'critical' | null; connectivity: GatewayState['connectivity']; connections: GatewayState['connections']; status: string; lastMessage: string; onSpeed: (speed: number) => void; onLoad: (level: 'low' | 'normal' | 'high' | 'critical') => void; onConnectivity: (mode: 'online' | 'degraded' | 'offline') => void }) {
+function ControlConsole({ speedKph, load, connectivity, connections, status, lastMessage, onSpeed, onLoad, onConnectivity, clusterMotionPaused, onClusterMotionPaused }: { speedKph: number; load: 'low' | 'normal' | 'high' | 'critical' | null; connectivity: GatewayState['connectivity']; connections: GatewayState['connections']; status: string; lastMessage: string; onSpeed: (speed: number) => void; onLoad: (level: 'low' | 'normal' | 'high' | 'critical') => void; onConnectivity: (mode: 'online' | 'degraded' | 'offline') => void; clusterMotionPaused: boolean; onClusterMotionPaused: (paused: boolean) => void }) {
   const [speedInput, setSpeedInput] = useState(String(speedKph));
   useEffect(() => setSpeedInput(String(speedKph)), [speedKph]);
   return <section className="control-console" aria-labelledby="console-title">
@@ -334,12 +369,13 @@ function ControlConsole({ speedKph, load, connectivity, connections, status, las
       const connection = connections[displayId];
       return <div className="display-connection-card" key={displayId}><div><b>{displayId}</b><small>{connection.deviceId} · {connection.role}</small></div><span className={`gateway-state ${connection.status}`}>{connection.status}</span><small className="connection-message">{connection.lastMessage}</small></div>;
     })}</div>
-    <div className="console-controls"><label>Vehicle speed <span><input type="number" min="0" max="300" value={speedInput} onChange={(event) => setSpeedInput(event.target.value)} /> km/h</span></label><button onClick={() => { const speed = Number(speedInput); if (Number.isFinite(speed) && speed >= 0 && speed <= 300) onSpeed(speed); }}>Send vehicle.telemetry.report</button><label>Simulated driver cognitive load</label><button onClick={() => onLoad('low')}>Report low load</button><button onClick={() => onLoad('normal')}>Report normal load</button><button onClick={() => onLoad('high')}>Report high load</button><button onClick={() => onLoad('critical')}>Report critical load</button><label>Simulated network condition</label><button aria-pressed={connectivity.mode === 'online' && connectivity.source === 'simulated'} onClick={() => onConnectivity('online')}>Set network online</button><button aria-pressed={connectivity.mode === 'degraded' && connectivity.source === 'simulated'} onClick={() => onConnectivity('degraded')}>Set network degraded</button><button aria-pressed={connectivity.mode === 'offline' && connectivity.source === 'simulated'} onClick={() => onConnectivity('offline')}>Set network offline</button></div>
+    <div className="console-controls"><label>Vehicle speed <span><input type="number" min="0" max="300" value={speedInput} onChange={(event) => setSpeedInput(event.target.value)} /> km/h</span></label><button onClick={() => { const speed = Number(speedInput); if (Number.isFinite(speed) && speed >= 0 && speed <= 300) onSpeed(speed); }}>Send vehicle.telemetry.report</button><button aria-pressed={clusterMotionPaused} onClick={() => onClusterMotionPaused(!clusterMotionPaused)}>{clusterMotionPaused ? 'Resume' : 'Pause'} Cluster motion</button><label>Simulated driver cognitive load</label><button onClick={() => onLoad('low')}>Report low load</button><button onClick={() => onLoad('normal')}>Report normal load</button><button onClick={() => onLoad('high')}>Report high load</button><button onClick={() => onLoad('critical')}>Report critical load</button><label>Simulated network condition</label><button aria-pressed={connectivity.mode === 'online' && connectivity.source === 'simulated'} onClick={() => onConnectivity('online')}>Set network online</button><button aria-pressed={connectivity.mode === 'degraded' && connectivity.source === 'simulated'} onClick={() => onConnectivity('degraded')}>Set network degraded</button><button aria-pressed={connectivity.mode === 'offline' && connectivity.source === 'simulated'} onClick={() => onConnectivity('offline')}>Set network offline</button></div>
     <div className="console-feedback"><span>Connection: {status}{status === 'connected' ? ' · registered · welcome received' : ''}</span><span>Last gateway message: {lastMessage}</span></div>
   </section>;
 }
 
 function App() {
+  const [clusterMotionPaused, setClusterMotionPaused] = useState(false);
   const { state: gateway, sendCommand, sendTaskCommand, taskReceipt, voice, startVoice, stopVoice, discovery, searchPlaces, previewRoute, recommendation, requestJourneyRecommendation, submitJourneyRecommendation } = useAuraCommand();
   const centerConnection = gateway.connections['center-main'];
   const passengerConnection = gateway.connections['front-passenger-main'];
@@ -349,6 +385,7 @@ function App() {
   const clusterPresentation = resolvePresentation({ role: 'cluster', ...(gateway.load ? { load: gateway.load } : {}), activeSafetyWarning: gateway.activeSafetyWarning !== null });
   const centerPresentation = resolvePresentation({ role: 'center', ...(gateway.load ? { load: gateway.load } : {}), activeSafetyWarning: gateway.activeSafetyWarning !== null });
   const passengerProposal = [...gateway.proposals].reverse().find((item) => (item.kind === 'ADD_TRIP_STOP' || item.payload?.discoveryMode === 'route_preview') && item.targetRole === 'center');
+  const rearProposal = [...gateway.proposals].reverse().find((item) => item.kind === 'ADD_TRIP_STOP' && item.payload?.origin === 'rear_simulator' && item.targetRole === 'center');
   const voiceActive = voice.status !== 'IDLE' && voice.status !== 'ERROR';
   const setConnectivity = (mode: 'online' | 'degraded' | 'offline') => sendCommand('center-main', { type: 'connectivity.mode.report', payload: { mode, evidence: 'CONTROL_CONSOLE_SIMULATION' } });
 
@@ -360,8 +397,8 @@ function App() {
       {voice.outputTranscript && <span><b>{BRAND.assistantName}:</b> {voice.outputTranscript}</span>}
     </div>}
     <div className="vehicle-layout">
-      <div className="driver-zone"><ScreenHeading title="Driver display" details="Cluster" gatewayStatus={clusterConnection.status} presence={gateway.presence}/><Cluster speedKph={gateway.speedKph} warning={gateway.activeSafetyWarning} presentation={clusterPresentation}/><ScreenHeading title="Journey & control" details="Center" gatewayStatus={centerConnection.status} presence={gateway.presence}/><CenterDisplay proposals={gateway.proposals} journeyStops={gateway.journeyStops} connection={centerConnection} warning={gateway.activeSafetyWarning} presentation={centerPresentation} recommendation={recommendation} tasks={gateway.activeTasks} taskReceipt={taskReceipt} onTaskCommand={sendTaskCommand} onRecommendationRequest={requestJourneyRecommendation} onRecommendationSubmit={(proposal) => { submitJourneyRecommendation(proposal); }} onConsent={(proposalId, decision) => sendCommand('center-main', { type: 'action.consent', payload: { proposalId, decision } })}/></div>
-      <div className="passenger-zone"><ScreenHeading title="Passenger discovery" details="Front passenger" gatewayStatus={passengerConnection.status} presence={gateway.presence}/><PassengerDisplay discovery={discovery} searchPlaces={searchPlaces} previewRoute={previewRoute} proposal={passengerProposal} connection={passengerConnection} onProposal={(place, route, originLabel) => {
+      <div className="driver-zone"><ScreenHeading title="Driver display" details="Cluster" gatewayStatus={clusterConnection.status} presence={gateway.presence}/><Cluster speedKph={gateway.speedKph} warning={gateway.activeSafetyWarning} presentation={clusterPresentation} motionPaused={clusterMotionPaused}/><ScreenHeading title="Journey & control" details="Center" gatewayStatus={centerConnection.status} presence={gateway.presence}/><CenterDisplay proposals={gateway.proposals} journeyStops={gateway.journeyStops} connection={centerConnection} warning={gateway.activeSafetyWarning} presentation={centerPresentation} recommendation={recommendation} tasks={gateway.activeTasks} taskReceipt={taskReceipt} onTaskCommand={sendTaskCommand} onRecommendationRequest={requestJourneyRecommendation} onRecommendationSubmit={(proposal) => { submitJourneyRecommendation(proposal); }} onConsent={(proposalId, decision) => sendCommand('center-main', { type: 'action.consent', payload: { proposalId, decision } })}/></div>
+      <div className="passenger-zone"><ScreenHeading title="Passenger discovery" details="Front passenger" gatewayStatus={passengerConnection.status} presence={gateway.presence}/><PassengerDisplay discovery={discovery} searchPlaces={searchPlaces} previewRoute={previewRoute} proposal={passengerProposal} connection={passengerConnection} connectivity={gateway.connectivity} onProposal={(place, route, originLabel) => {
         const pathSummary = `${(route.distanceMeters / 1000).toFixed(1)} km · ${(route.durationSeconds / 60).toFixed(0)} min`;
         const payload = discovery.route;
         if (payload.status !== 'available' || payload.freshness !== 'fresh' || payload.source !== 'api' || !payload.provider || typeof payload.observedAt !== 'number' || !payload.attribution || !payload.attributionUrl) return;
@@ -379,10 +416,10 @@ function App() {
           },
         } } });
       }}/></div>
-      <div className="rear-zone"><ScreenHeading title="Rear cabin" details="Rear display" gatewayStatus={rearConnection.status} presence={gateway.presence}/><RearDisplay/></div>
-      <div className="window-zone"><ScreenHeading title="Ambient window" details="Window" gatewayStatus={windowConnection.status} presence={gateway.presence} windowExamples/><WindowDisplay/></div>
+      <div className="rear-zone"><ScreenHeading title="Rear cabin" details="Rear display" gatewayStatus={rearConnection.status} presence={gateway.presence}/><RearDisplay proposal={rearProposal} onRestStopProposal={() => sendCommand('rear-tablet', { type: 'action.propose', payload: { proposal: { proposalId: crypto.randomUUID(), kind: 'ADD_TRIP_STOP', summary: 'Example rest stop · driver approval required', targetRole: 'center', priority: 'secondary', requiresConsent: true, payload: { placeId: 'simulated-rest-stop', label: 'SIMULATED REST STOP', origin: 'rear_simulator', source: 'simulated', freshness: 'unknown' } } } })}/></div>
+      <div className="window-zone"><ScreenHeading title="Ambient window" details="Window" gatewayStatus={windowConnection.status} presence={gateway.presence} windowExamples/><WindowDisplay connectivity={gateway.connectivity} presence={gateway.presence}/></div>
     </div>
-    <ControlConsole speedKph={gateway.speedKph} load={gateway.load} connectivity={gateway.connectivity} connections={gateway.connections} status={centerConnection.status} lastMessage={centerConnection.lastMessage} onSpeed={(speed) => sendCommand('center-main', { type: 'vehicle.telemetry.report', payload: { vehicle: { speedKph: speed } } })} onLoad={(level) => sendCommand('center-main', { type: 'driver.cognitive_load.report', payload: { level, timestamp: Date.now(), confidence: 1 } })} onConnectivity={setConnectivity}/>
+    <ControlConsole speedKph={gateway.speedKph} load={gateway.load} connectivity={gateway.connectivity} connections={gateway.connections} status={centerConnection.status} lastMessage={centerConnection.lastMessage} onSpeed={(speed) => sendCommand('center-main', { type: 'vehicle.telemetry.report', payload: { vehicle: { speedKph: speed } } })} onLoad={(level) => sendCommand('center-main', { type: 'driver.cognitive_load.report', payload: { level, timestamp: Date.now(), confidence: 1 } })} onConnectivity={setConnectivity} clusterMotionPaused={clusterMotionPaused} onClusterMotionPaused={setClusterMotionPaused}/>
     <AssistanceTimingPanel />
     <footer className="simulator-footer"><span>Scenario&nbsp; <b>Munich → Stuttgart</b></span><span>Illustrative route values · shared vehicle telemetry updates when the gateway is connected</span></footer>
   </main>;
