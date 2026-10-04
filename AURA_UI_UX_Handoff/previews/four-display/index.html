@@ -1,0 +1,194 @@
+<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AURA Four Displays</title><style>body{margin:0;background:#121416;padding:20px}*{box-sizing:border-box}</style><div id="aura-four-screen-demo" class="viz-dotted-background">
+<style>
+#aura-four-screen-demo{--ink:#f2f2f2;--muted:#b9b9be;--matte:#1c1c1e;--slate:#2c2c2e;--orange:#ff5a00;font-family:Arial,Helvetica,sans-serif;padding:12px 0;color:var(--ink)}
+#aura-four-screen-demo *{box-sizing:border-box}
+#aura-four-screen-demo .demo-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px;color:light-dark(#252529,#eeeeef)}
+#aura-four-screen-demo .demo-title{font-size:15px;font-weight:500;letter-spacing:.08em}
+#aura-four-screen-demo .demo-title small{display:block;font-size:12px;letter-spacing:0;margin-top:5px;color:light-dark(#626269,#b2b2b9)}
+#aura-four-screen-demo .tabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:15px}
+#aura-four-screen-demo button{font:500 13px Arial,Helvetica,sans-serif;min-height:44px;border:1px solid #5b5b60;border-radius:3px;padding:8px 12px;color:var(--ink);background:#323235;cursor:inherit}
+#aura-four-screen-demo button[aria-pressed=true]{color:#1c1c1e;background:#e5dacc;border-color:#e5dacc}
+#aura-four-screen-demo button:disabled{opacity:.55}
+#aura-four-screen-demo .tabs button{background:light-dark(#e8e8eb,#29292e);color:light-dark(#333338,#eee);border-color:light-dark(#c6c6ce,#5b5b60)}
+#aura-four-screen-demo .tabs button[aria-selected=true]{background:#e5dacc;color:#222;border-color:#e5dacc}
+#aura-four-screen-demo .orange{background:var(--orange);border-color:var(--orange);color:#161616}
+#aura-four-screen-demo .hmi{position:relative;background:var(--matte);border:7px solid #121214;border-radius:13px;overflow:hidden}
+#aura-four-screen-demo .hmi[hidden]{display:none}
+#aura-four-screen-demo .status{display:flex;gap:9px;align-items:center;font-size:12px;color:#c6c6cb;padding:9px 12px;min-height:34px;flex-wrap:wrap}
+#aura-four-screen-demo .spacer{flex:1}
+#aura-four-screen-demo .presence{color:#ffab79;font-size:11px;letter-spacing:.04em;border-left:3px solid var(--orange);padding-left:7px}
+#aura-four-screen-demo .presence.warning{border-color:#ff3b30;color:#ff9c96}
+#aura-four-screen-demo .center{display:grid;grid-template-columns:35% 65%;aspect-ratio:16/9}
+#aura-four-screen-demo .center.high-load{grid-template-columns:0 1fr}
+#aura-four-screen-demo .center.high-load .journey{visibility:hidden;padding:0}
+#aura-four-screen-demo .journey{background:#3b3d3f;padding:22px 18px}
+#aura-four-screen-demo h2{margin:0 0 23px;font-size:clamp(22px,4vw,35px);font-weight:700;line-height:1.05;letter-spacing:-.025em}
+#aura-four-screen-demo .timeline{display:flex;flex-direction:column;gap:0}
+#aura-four-screen-demo .stop{display:grid;grid-template-columns:46px 15px 1fr;gap:8px;position:relative;min-height:54px;font-size:13px;padding:4px 0 10px}
+#aura-four-screen-demo .stop:before{position:absolute;content:'';left:61px;top:13px;bottom:-5px;width:2px;background:#9b9ca0}
+#aura-four-screen-demo .stop:last-child:before{display:none}
+#aura-four-screen-demo .stop time{font-size:13px;color:#dedee0;padding-top:2px}
+#aura-four-screen-demo .dot{margin-top:4px;width:11px;height:11px;border-radius:50%;background:#b6b6bb;position:relative;z-index:1}
+#aura-four-screen-demo .dot.active{background:var(--orange)}
+#aura-four-screen-demo .dot.traffic{border-radius:0;background:#ff3b30}
+#aura-four-screen-demo .stop b{font-size:14px;line-height:1.2;display:block}
+#aura-four-screen-demo .stop small{display:block;margin-top:5px;color:#c4c4c9;font-size:12px;line-height:1.35}
+#aura-four-screen-demo .center-main{display:flex;flex-direction:column;min-width:0;position:relative}
+#aura-four-screen-demo .metrics{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #58585c;border-bottom:1px solid #58585c;margin:0 10px;min-height:67px}
+#aura-four-screen-demo .metric{padding:10px;border-right:1px solid #58585c;display:flex;flex-direction:column;gap:4px}
+#aura-four-screen-demo .metric:last-child{border:0}
+#aura-four-screen-demo .metric b{font-size:19px}
+#aura-four-screen-demo .metric small{font-size:11px;color:#c0c0c5}
+#aura-four-screen-demo .route-map{position:relative;flex:1;min-height:145px;margin:0 10px;overflow:hidden;background:#4a4b4d}
+#aura-four-screen-demo .route-map img{display:block;position:absolute;width:100%;height:100%;object-fit:cover}
+#aura-four-screen-demo .map-label{position:absolute;top:8px;left:8px;background:#222;color:#eee;font-size:11px;padding:4px 6px}
+#aura-four-screen-demo .center-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px 10px}
+#aura-four-screen-demo .center-actions button{padding:8px 6px;text-align:left;display:flex;flex-direction:column;gap:4px}
+#aura-four-screen-demo .center-actions small{font-size:11px;font-weight:400}
+#aura-four-screen-demo .proposal{position:absolute;left:18px;right:18px;bottom:78px;z-index:3;background:#303033;border:1px solid #96969c;padding:13px}
+#aura-four-screen-demo .proposal[hidden]{display:none}
+#aura-four-screen-demo .proposal-kicker{font-size:11px;color:#ffb184;letter-spacing:.05em}
+#aura-four-screen-demo .proposal b{display:block;margin:7px 0;font-size:17px}
+#aura-four-screen-demo .proposal small{font-size:12px;color:#d0d0d5}
+#aura-four-screen-demo .proposal-buttons{display:flex;gap:7px;margin-top:12px}
+#aura-four-screen-demo .edge-marker{position:absolute;right:0;top:50%;width:4px;height:12px;background:var(--orange);z-index:5}
+#aura-four-screen-demo .edge-marker[hidden]{display:none}
+#aura-four-screen-demo .safety-cover{position:absolute;inset:0;background:#291d1d;border:3px solid #ff3b30;padding:12%;z-index:6;display:flex;flex-direction:column;justify-content:center;gap:16px}
+#aura-four-screen-demo .safety-cover[hidden]{display:none}
+#aura-four-screen-demo .safety-cover span{color:#ff8981;font-size:13px}
+#aura-four-screen-demo .safety-cover b{font-size:32px}
+#aura-four-screen-demo .safety-cover small{font-size:14px;line-height:1.5}
+#aura-four-screen-demo .passenger{display:grid;grid-template-columns:32% 68%;aspect-ratio:16/9}
+#aura-four-screen-demo .discovery-sidebar{padding:21px 18px;border-right:1px solid #5a5a5e;background:#292b2c}
+#aura-four-screen-demo .discovery-sidebar h2{margin-bottom:20px}
+#aura-four-screen-demo h3{font-size:15px;font-weight:700;margin:13px 0 6px}
+#aura-four-screen-demo p{font-size:12px;color:#c3c3c8;line-height:1.4;margin:0}
+#aura-four-screen-demo .sidebar-rule{height:1px;background:#5b5b60;margin:14px 0}
+#aura-four-screen-demo .filters{display:flex;flex-direction:column;gap:2px}
+#aura-four-screen-demo .filters button{text-align:left;background:transparent;border-color:transparent;min-height:33px;padding:6px 8px;font-size:13px}
+#aura-four-screen-demo .filters button[aria-pressed=true]{background:#414143;color:#ffb184}
+#aura-four-screen-demo .discovery-main{display:flex;flex-direction:column;padding:10px;gap:10px;min-width:0}
+#aura-four-screen-demo .hero-place{position:relative;flex:1;min-height:170px;overflow:hidden;background:#383838}
+#aura-four-screen-demo .hero-place img{width:100%;height:100%;object-fit:cover;position:absolute}
+#aura-four-screen-demo .hero-caption{position:absolute;bottom:0;left:0;right:0;background:#232323;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+#aura-four-screen-demo .hero-caption b{display:block;font-size:22px}
+#aura-four-screen-demo .hero-caption small{display:block;font-size:12px;color:#d2d2d6;margin-top:4px}
+#aura-four-screen-demo .hero-caption button{white-space:nowrap;flex-shrink:0}
+#aura-four-screen-demo .place-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+#aura-four-screen-demo .place-card{text-align:left;padding:10px 8px 8px;min-width:0;background:#3c3e40;border:1px solid transparent}
+#aura-four-screen-demo .place-card[aria-pressed=true]{color:#f2f2f2;background:#3c3e40;border-color:var(--orange)}
+#aura-four-screen-demo .place-card b{font-size:15px;display:block}
+#aura-four-screen-demo .place-card small{font-size:12px;display:block;font-weight:400;margin:6px 0;color:#d2d2d7}
+#aura-four-screen-demo .place-card img{display:block;width:100%;height:74px;object-fit:cover}
+#aura-four-screen-demo .passenger-feedback{font-size:12px;color:#efc1a4;min-height:17px;padding:0 2px}
+#aura-four-screen-demo .rear{aspect-ratio:4/3;padding:11px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#aura-four-screen-demo .rear-tile{background:#3b3e40;border:2px solid #c8763b;border-radius:5px;padding:18px;min-width:0;display:flex;flex-direction:column;justify-content:space-between;gap:13px}
+#aura-four-screen-demo .rear-tile h2{font-size:22px;margin:0}
+#aura-four-screen-demo .media-buttons{display:flex;flex-wrap:wrap;gap:6px}
+#aura-four-screen-demo .media-buttons button{padding:8px 10px}
+#aura-four-screen-demo .media-progress{height:5px;background:#222;margin-top:10px}
+#aura-four-screen-demo .media-progress i{display:block;height:100%;width:0;background:#ed822d}
+#aura-four-screen-demo .rear-tile p{font-size:14px;color:#eee}
+#aura-four-screen-demo .rear-tile .meta{font-size:12px;color:#d0d0d4;margin-top:5px}
+#aura-four-screen-demo .temperature-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#aura-four-screen-demo .temperature-row output{font-size:clamp(28px,5vw,47px);white-space:nowrap;font-variant-numeric:tabular-nums}
+#aura-four-screen-demo .temperature-row button{background:transparent;border-color:transparent;color:#f29a55;font-size:24px;padding:3px 10px}
+#aura-four-screen-demo .climate-footer{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+#aura-four-screen-demo .comm-row{display:flex;justify-content:space-between;gap:8px;align-items:center}
+#aura-four-screen-demo .settings-actions{display:grid;gap:9px}
+#aura-four-screen-demo .settings-actions button{text-align:left;background:transparent;border-color:#747477}
+#aura-four-screen-demo .settings-panel{padding:10px;background:#252529}
+#aura-four-screen-demo .settings-panel[hidden]{display:none}
+#aura-four-screen-demo input[type=range]{width:100%;accent-color:#ff5a00;min-height:35px}
+#aura-four-screen-demo .window{aspect-ratio:4/3;position:relative;background:#283743;isolation:isolate}
+#aura-four-screen-demo .window-scene{width:100%;height:100%;position:absolute;object-fit:cover;z-index:-1}
+#aura-four-screen-demo .window-strip{position:absolute;left:6%;right:6%;bottom:9%;border-top:1px solid #e7e1d5;padding-top:12px;display:grid;grid-template-columns:.85fr 1fr 1.25fr 1.35fr;gap:10px;color:#f2eee1}
+#aura-four-screen-demo .window-cell{border-right:1px solid #c5c3ba;padding-right:10px;min-width:0}
+#aura-four-screen-demo .window-cell:last-child{border:0}
+#aura-four-screen-demo .window-cell b{font-size:clamp(15px,2.6vw,24px);display:block;font-weight:400}
+#aura-four-screen-demo .window-cell small{display:block;font-size:11px;margin-top:5px;line-height:1.4;color:#eee7d6}
+#aura-four-screen-demo .window-energy{height:4px;background:#6a6c68;margin:7px 0 10px}
+#aura-four-screen-demo .window-energy i{display:block;background:#ef8b43;height:100%;width:82%}
+#aura-four-screen-demo .window-presence{position:absolute;left:6%;bottom:3%;font-size:11px;letter-spacing:.04em;color:#fff0d9}
+#aura-four-screen-demo .window-presence.listening:before{content:'';display:inline-block;width:20px;height:3px;background:#ff8a43;margin-right:8px;vertical-align:middle}
+#aura-four-screen-demo .window-presence.warning{color:#ffd8d4;background:#542420;padding:5px 8px}
+#aura-four-screen-demo .dev-console{margin-top:17px;padding:14px 0 0;border-top:1px solid light-dark(#d0d0d6,#4a4a51);color:light-dark(#333338,#ededee)}
+#aura-four-screen-demo .console-title{font-size:12px;margin-bottom:10px;color:light-dark(#67676e,#b6b6bd)}
+#aura-four-screen-demo .console-controls{display:flex;flex-wrap:wrap;gap:10px 15px;align-items:center}
+#aura-four-screen-demo .console-controls label{display:flex;gap:7px;align-items:center;font-size:12px}
+#aura-four-screen-demo select{color:light-dark(#27272b,#eeeeef);background:light-dark(#ededf0,#303036);border:1px solid light-dark(#bfbfc7,#606068);padding:7px;font-size:14px;min-height:44px;border-radius:4px;max-width:100%}
+#aura-four-screen-demo .console-controls button{background:light-dark(#e8e8eb,#29292e);color:light-dark(#333338,#eee);border-color:light-dark(#c6c6ce,#5b5b60)}
+#aura-four-screen-demo .demo-result{font-size:12px;line-height:1.5;margin-top:12px;min-height:19px;color:light-dark(#55555c,#c1c1c8)}
+#aura-four-screen-demo .popover{position:absolute;inset:15%;background:#252529;border:1px solid #7b7b83;padding:20px;z-index:4;display:flex;flex-direction:column;gap:12px;justify-content:center}
+#aura-four-screen-demo .popover[hidden]{display:none}
+@media(max-width:560px){#aura-four-screen-demo .center,#aura-four-screen-demo .passenger{aspect-ratio:auto;grid-template-columns:1fr}#aura-four-screen-demo .journey{padding:18px}#aura-four-screen-demo .timeline{display:grid;grid-template-columns:1fr 1fr;gap:12px}#aura-four-screen-demo .stop{grid-template-columns:40px 12px 1fr;min-height:60px;gap:7px}#aura-four-screen-demo .stop:before{display:none}#aura-four-screen-demo .journey h2{font-size:27px;margin-bottom:17px}#aura-four-screen-demo .route-map{min-height:210px}#aura-four-screen-demo .metrics{min-height:72px}#aura-four-screen-demo .metric{padding:8px 6px}#aura-four-screen-demo .metric b{font-size:17px}#aura-four-screen-demo .center-actions{grid-template-columns:1fr 1fr}#aura-four-screen-demo .proposal{bottom:133px}#aura-four-screen-demo .discovery-sidebar{padding:18px}#aura-four-screen-demo .discovery-sidebar h2{font-size:27px;line-height:1; margin-bottom:13px}#aura-four-screen-demo .discovery-sidebar h2 br{display:none}#aura-four-screen-demo .filters{flex-direction:row;flex-wrap:wrap}#aura-four-screen-demo .sidebar-copy{display:none}#aura-four-screen-demo .hero-place{min-height:220px}#aura-four-screen-demo .hero-caption{flex-wrap:wrap}#aura-four-screen-demo .hero-caption b{font-size:21px}#aura-four-screen-demo .place-cards{grid-template-columns:1fr}#aura-four-screen-demo .place-card{display:grid;grid-template-columns:1fr 85px;align-items:center;gap:7px}#aura-four-screen-demo .place-card img{grid-column:2;grid-row:1/3;height:70px}#aura-four-screen-demo .place-card small{margin:0}#aura-four-screen-demo .rear{aspect-ratio:auto;grid-template-columns:1fr}#aura-four-screen-demo .rear-tile{min-height:225px}#aura-four-screen-demo .rear-tile h2{font-size:22px}#aura-four-screen-demo .temperature-row output{font-size:43px}#aura-four-screen-demo .window{min-height:390px;aspect-ratio:4/3}#aura-four-screen-demo .window-strip{grid-template-columns:1fr 1fr;gap:13px;bottom:15%;padding:12px 10px;background:#1e2b34e8}#aura-four-screen-demo .window-cell b{font-size:20px}#aura-four-screen-demo .window-cell:nth-child(2){border:0}#aura-four-screen-demo .window-presence{bottom:6%;font-size:12px}#aura-four-screen-demo .popover{inset:8%;}#aura-four-screen-demo .hmi{border-width:5px}}
+</style>
+<div class="demo-top"><div class="demo-title">AURA · MULTI-DISPLAY<small>四螢幕互動預覽 · 資料與操作皆為模擬</small></div></div>
+<div class="tabs" role="tablist" aria-label="AURA 螢幕">
+<button type="button" class="cursor-interaction" role="tab" id="aura-tab-center" aria-controls="aura-panel-center" aria-selected="true" data-view="center">中控 <span id="aura-pending-count"></span></button>
+<button type="button" class="cursor-interaction" role="tab" id="aura-tab-passenger" aria-controls="aura-panel-passenger" aria-selected="false" data-view="passenger">副駕</button>
+<button type="button" class="cursor-interaction" role="tab" id="aura-tab-rear" aria-controls="aura-panel-rear" aria-selected="false" data-view="rear">後座</button>
+<button type="button" class="cursor-interaction" role="tab" id="aura-tab-window" aria-controls="aura-panel-window" aria-selected="false" data-view="window">互動車窗</button>
+</div>
+<section class="hmi center" id="aura-panel-center" role="tabpanel" aria-labelledby="aura-tab-center">
+ <aside class="journey"><h2>JOURNEY</h2><div class="timeline" id="aura-journey-list"></div></aside>
+ <div class="center-main">
+  <div class="status"><span>16:03</span><span>21°C</span><span class="spacer"></span><span class="presence" data-presence>IDLE</span><span data-network>ONLINE · SIM</span></div>
+  <div class="metrics"><div class="metric"><b id="aura-distance">98 km</b><small>TO DESTINATION</small></div><div class="metric"><b id="aura-eta">64 min</b><small id="aura-eta-clock">ETA · 19:32</small></div><div class="metric"><b>A–8</b><small>CURRENT ROAD</small></div></div>
+  <div class="route-map"><img src="assets/center-map.webp" alt="原始參考圖中的示意路線地圖，並非即時導航"/><span class="map-label">REFERENCE MAP · SIMULATED</span></div>
+  <div class="center-actions"><button class="orange cursor-interaction" type="button" data-center-action="navigation"><b>NAVIGATE</b><small>Route overview</small></button><button class="orange cursor-interaction" type="button" data-center-action="radio"><b>RADIO</b><small>FM 98.4 · SIM</small></button><button class="orange cursor-interaction" type="button" data-center-action="climate"><b>CLIMATE</b><small>22.0°C · AUTO</small></button><button class="orange cursor-interaction" type="button" data-center-action="phone"><b>PHONE</b><small>Simulated status</small></button></div>
+  <div class="proposal" id="aura-center-proposal" hidden><span class="proposal-kicker" id="aura-proposal-origin"></span><b id="aura-proposal-name"></b><small id="aura-proposal-impact"></small><div class="proposal-buttons"><button class="cursor-interaction" type="button" id="aura-decline">略過</button><button class="orange cursor-interaction" type="button" id="aura-accept">同意加入行程</button></div></div>
+  <div class="edge-marker" id="aura-deferred-marker" hidden aria-label="非必要提案已延後"></div>
+ </div>
+ <div class="safety-cover" id="aura-critical-cover" hidden role="alert"><span>CRITICAL · SIMULATED</span><b>請注意前方障礙</b><small>安全資訊優先。旅程提案暫停呈現。</small></div>
+ <div class="popover" id="aura-center-detail" hidden><h3 id="aura-center-detail-title"></h3><p id="aura-center-detail-content"></p><button class="cursor-interaction" type="button" id="aura-center-detail-close">關閉</button></div>
+</section>
+<section class="hmi passenger" id="aura-panel-passenger" role="tabpanel" aria-labelledby="aura-tab-passenger" hidden>
+ <aside class="discovery-sidebar"><h2>DINING<br/>GUIDE</h2><div class="sidebar-copy"><h3>LOCAL FLAVOR</h3><p>Explore places along your journey.</p><h3>CURATED SPOTS</h3><p>Compare cuisine and simulated journey impact.</p><div class="sidebar-rule"></div></div><h3>FILTER &amp; SEARCH</h3><div class="filters" role="group" aria-label="餐廳分類"><button type="button" class="cursor-interaction" data-filter="all" aria-pressed="true">All</button><button type="button" class="cursor-interaction" data-filter="dining" aria-pressed="false">Fine dining</button><button type="button" class="cursor-interaction" data-filter="cafe" aria-pressed="false">Cafés</button><button type="button" class="cursor-interaction" data-filter="vegan" aria-pressed="false">Vegan</button></div></aside>
+ <div class="discovery-main"><div class="status"><span>16:03</span><span class="spacer"></span><span class="presence" data-presence>IDLE</span><span>EXAMPLE PLACES</span></div><div class="hero-place"><img id="aura-place-photo" src="assets/dining-hero.webp" alt="原始設計圖的餐廳素材"/><div class="hero-caption"><div><b id="aura-place-name">AQUAMARINE</b><small id="aura-place-meta">Mediterranean · ★ 4.8 · 繞路 +5 min</small></div><button class="orange cursor-interaction" type="button" id="aura-send-proposal">提議停靠</button></div></div><div class="place-cards" id="aura-place-cards"></div><div class="passenger-feedback" id="aura-passenger-feedback" role="status">示例地點；需駕駛同意，才會加入模擬行程。</div></div>
+</section>
+<section class="hmi rear" id="aura-panel-rear" role="tabpanel" aria-labelledby="aura-tab-rear" hidden>
+ <div class="rear-tile"><h2>MEDIA PLAYER</h2><div class="media-buttons"><button type="button" class="cursor-interaction" id="aura-media-play" aria-pressed="false">播放</button><button type="button" class="cursor-interaction" id="aura-media-next">下一首</button><button type="button" class="cursor-interaction" id="aura-media-mute" aria-pressed="false">靜音</button></div><div><p>MUSIC &amp; AUDIO</p><p id="aura-media-track">The Midnight Echo</p><div class="media-progress"><i id="aura-media-progress"></i></div><div class="meta" id="aura-media-time">0:00 / 3:00 · 模擬播放，無音訊</div></div></div>
+ <div class="rear-tile"><h2>CLIMATE CONTROL</h2><p>REAR ZONE TEMP</p><div class="temperature-row"><button type="button" class="cursor-interaction" id="aura-temp-down" aria-label="降低後座模擬溫度">‹</button><output id="aura-temperature">21.5°C</output><button type="button" class="cursor-interaction" id="aura-temp-up" aria-label="提高後座模擬溫度">›</button></div><div class="climate-footer"><button type="button" class="cursor-interaction" id="aura-fan">FAN: 3</button><button type="button" class="cursor-interaction" id="aura-climate-sync" aria-pressed="false">SYNC</button><span class="meta">SIMULATED</span></div></div>
+ <div class="rear-tile"><h2>REAR SEAT COMM.</h2><div class="comm-row"><div><p>DRIVER CALL</p><div class="meta" id="aura-call-status">尚未發送</div></div><button type="button" class="orange cursor-interaction" id="aura-driver-call">請求通話</button></div><div class="comm-row"><div><p>JOURNEY REQUEST</p><div class="meta" id="aura-rear-proposal-status">停靠提案需駕駛同意</div></div><button type="button" class="cursor-interaction" id="aura-rear-propose">提議休息</button></div></div>
+ <div class="rear-tile"><h2>SYSTEM SETTINGS</h2><div class="settings-actions"><button type="button" class="cursor-interaction" id="aura-display-settings">DISPLAY &amp; AUDIO</button><button type="button" class="cursor-interaction" id="aura-config-settings">CONFIGURATION</button></div><div class="settings-panel" id="aura-settings-panel" hidden><label for="aura-brightness" style="font-size:12px">後座預覽亮度 <output id="aura-brightness-value">100%</output></label><input type="range" id="aura-brightness" min="50" max="100" value="100"/><div class="meta" id="aura-settings-note">只影響此預覽，不控制硬體。</div></div></div>
+</section>
+<section class="hmi window" id="aura-panel-window" role="tabpanel" aria-labelledby="aura-tab-window" hidden>
+ <img class="window-scene" src="assets/window-scene.webp" alt="原始參考圖的雨天道路景色；實際部署時此區保留車窗外視野"/>
+ <div class="window-strip"><div class="window-cell"><b>19:42</b><small>TIME · SIMULATED</small></div><div class="window-cell"><b>12°C · RAIN</b><small>WEATHER EXAMPLE</small></div><div class="window-cell"><b>↗ 14 KM</b><small>ALPINE ROAD · ROUTE EXAMPLE</small></div><div class="window-cell"><div class="window-energy"><i></i></div><b>82% · 412 KM</b><small id="aura-window-network">ONLINE · SIMULATED</small></div></div>
+ <div class="window-presence" id="aura-window-presence">AURA · IDLE</div>
+</section>
+<div class="dev-console" aria-label="獨立 Developer / Simulation Console"><div class="console-title">DEVELOPER / SIMULATION CONSOLE · 非車內 HMI</div><div class="console-controls"><label>駕駛負荷<select id="aura-driver-load"><option value="NORMAL">NORMAL</option><option value="HIGH">HIGH</option><option value="CRITICAL">CRITICAL</option></select></label><label>網路<select id="aura-network"><option value="online">連線</option><option value="offline">離線／本地</option></select></label><label>AURA 狀態<select id="aura-presence-control"><option>IDLE</option><option>LISTENING</option><option>THINKING</option><option>SPEAKING</option><option>EXECUTING</option><option>WARNING</option></select></label><button type="button" class="cursor-interaction" id="aura-example-proposal">模擬副駕提案</button><button type="button" class="cursor-interaction" id="aura-reset-demo">重設情境</button></div><div class="demo-result" id="aura-demo-result" role="status" aria-live="polite">本地示範：副駕／後座提案 → 中控同意 → 模擬行程同步。尚未連接 Gateway 或外部服務。</div></div>
+<script>
+(()=>{
+ const root=document.getElementById('aura-four-screen-demo');const q=s=>root.querySelector(s);const qa=s=>root.querySelectorAll(s);
+ const assets={hero:'assets/dining-hero.webp',steak:'assets/dining-steak.webp',cafe:'assets/dining-cafe.webp',vegan:'assets/dining-vegan.webp'};
+ const places=[{id:'aquamarine',name:'AQUAMARINE',kind:'dining',cuisine:'Mediterranean',rating:'4.8',detour:5,photo:assets.hero},{id:'flame',name:'THE FLAME',kind:'dining',cuisine:'Modern',rating:'4.9',detour:4,photo:assets.steak},{id:'aurora',name:'AURORA',kind:'cafe',cuisine:'Café',rating:'4.7',detour:3,photo:assets.cafe},{id:'terra',name:'TERRA',kind:'vegan',cuisine:'Vegan',rating:'4.6',detour:6,photo:assets.vegan}];
+ let s={view:'center',load:'NORMAL',online:true,presence:'IDLE',selected:'aquamarine',filter:'all',proposal:null,stops:[],playing:false,mediaTime:0,track:0,muted:false,temp:21.5,fan:3,sync:false,call:false};
+ const tracks=['The Midnight Echo','Alpine Evening','Quiet Departure'];
+ function selected(){return places.find(p=>p.id===s.selected)}
+ function presence(){return s.load==='CRITICAL'?'WARNING':!s.online?'OFFLINE':s.presence}
+ function setView(view){s.view=view;qa('[data-view]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.view===view)));qa('[role=tabpanel]').forEach(p=>p.hidden=p.id!=='aura-panel-'+view);}
+ function pending(){return s.proposal && ['awaiting_consent','deferred'].includes(s.proposal.status)}
+ function renderJourney(){const items=[{time:'14:32',name:'MUNICH',detail:'Origin · departed',type:'active'},{time:'15:45',name:'DINNER',detail:'Hotel Ambra · reservation example',type:''},{time:'17:15',name:'A–8 AUTOBAHN',detail:'Traffic delay · simulated',type:'traffic'},...s.stops.slice(-1).map(p=>({time:'Stop',name:p.name,detail:'Driver approved · +'+p.detour+' min',type:'active'})),...(s.stops.length>1?[{time:'More',name:'+'+(s.stops.length-1)+' APPROVED STOPS',detail:s.stops.slice(0,-1).map(p=>p.name).join(' · '),type:'active'}]:[]),{time:'19:30',name:'STUTTGART',detail:'End location',type:'active'}];const host=q('#aura-journey-list');host.replaceChildren();items.forEach(item=>{const row=document.createElement('div');row.className='stop';if(items.length>5){row.style.minHeight='42px';row.style.padding='2px 0 5px';}const time=document.createElement('time');time.textContent=item.time;const dot=document.createElement('i');dot.className='dot '+item.type;const text=document.createElement('div');const title=document.createElement('b');title.textContent=item.name;const detail=document.createElement('small');detail.textContent=item.detail;text.append(title,detail);row.append(time,dot,text);host.append(row)});const delta=s.stops.reduce((a,p)=>a+p.detour,0);q('#aura-eta').textContent=(64+delta)+' min';q('#aura-eta-clock').textContent='ETA · '+(delta?'19:'+String(32+delta).padStart(2,'0'):'19:32');}
+ function renderPlaces(){const p=selected();q('#aura-place-name').textContent=p.name;q('#aura-place-meta').textContent=p.cuisine+' · ★ '+p.rating+' · 繞路 +'+p.detour+' min';q('#aura-place-photo').src=p.photo;const host=q('#aura-place-cards');host.replaceChildren();places.filter(p=>p.id!=='aquamarine' && (s.filter==='all'||p.kind===s.filter)).forEach(p=>{const b=document.createElement('button');b.type='button';b.className='place-card cursor-interaction';b.setAttribute('aria-pressed',String(s.selected===p.id));const name=document.createElement('b');name.textContent=p.name;const meta=document.createElement('small');meta.textContent=p.cuisine+' · ★ '+p.rating+' · +'+p.detour+' min';const photo=document.createElement('img');photo.src=p.photo;photo.alt='原始設計圖中的餐飲素材';b.append(name,meta,photo);b.addEventListener('click',()=>{s.selected=p.id;renderPlaces();});host.append(b);});qa('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===s.filter)));q('#aura-send-proposal').disabled=Boolean(pending());q('#aura-send-proposal').textContent=pending()?'等待駕駛':'提議停靠';}
+ function result(text){q('#aura-demo-result').textContent=text;}
+ function renderPolicy(){q('#aura-panel-center').classList.toggle('high-load',s.load==='HIGH');if(pending())s.proposal.status=['HIGH','CRITICAL'].includes(s.load)?'deferred':'awaiting_consent';const show=pending() && s.load==='NORMAL';q('#aura-center-proposal').hidden=!show;q('#aura-deferred-marker').hidden=!(pending()&&s.load==='HIGH');q('#aura-critical-cover').hidden=s.load!=='CRITICAL';q('.center-actions').style.visibility=s.load==='NORMAL'?'visible':'hidden';q('.journey').style.visibility=s.load==='NORMAL'?'visible':'hidden';q('#aura-center-detail').hidden=true;q('#aura-pending-count').textContent=pending()?'•':'';if(show){q('#aura-proposal-origin').textContent=s.proposal.origin+' · SIMULATED PROPOSAL';q('#aura-proposal-name').textContent=s.proposal.name;q('#aura-proposal-impact').textContent='示例繞路 +'+s.proposal.detour+' min · 需駕駛同意';}const message=s.proposal?s.proposal.status==='accepted'?'駕駛已同意，已加入模擬行程。':s.proposal.status==='declined'?'駕駛已略過，行程未變更。':s.proposal.status==='deferred'?'駕駛忙碌，提案已延後。':'提案已送出，等待駕駛同意。':'示例地點；需駕駛同意，才會加入模擬行程。';q('#aura-passenger-feedback').textContent=message;q('#aura-rear-proposal-status').textContent=s.proposal?.origin==='REAR'?message:'停靠提案需駕駛同意';renderPlaces();renderPresence();}
+ function renderPresence(){const state=presence();qa('[data-presence]').forEach(el=>{el.textContent='AURA · '+state;el.classList.toggle('warning',state==='WARNING');});qa('[data-network]').forEach(el=>el.textContent=s.online?'ONLINE · SIM':'LOCAL · OFFLINE');q('#aura-window-network').textContent=s.online?'ONLINE · SIMULATED':'OFFLINE · LOCAL EXAMPLE';q('#aura-window-presence').textContent='AURA · '+state+(state==='OFFLINE'?' · 本地模式':state==='WARNING'?' · 注意安全':'');q('#aura-window-presence').className='window-presence '+state.toLowerCase();}
+ function propose(p,origin){if(pending()){result('已有提案等待駕駛處理，未建立重複提案。');return;}if(s.stops.some(x=>x.id===p.id)){result('此停靠點已加入模擬行程，未重複新增。');return;}s.proposal={...p,origin,status:'awaiting_consent'};s.presence='THINKING';renderPolicy();result(s.proposal.status==='deferred'?'提案已延後。降低駕駛負荷後才會出現中控決策卡。':'模擬提案已送到中控；路線尚未變更。切換中控查看。');}
+ function decide(accept){if(!pending()||s.load!=='NORMAL')return;if(accept){s.stops.push({...s.proposal});s.proposal.status='accepted';s.presence='EXECUTING';}else{s.proposal.status='declined';s.presence='IDLE';}renderJourney();renderPolicy();result(accept?'駕駛已同意：模擬旅程已更新，副駕／後座結果同步。示意地圖不重新計算真實路線。':'駕駛已略過：行程維持原樣。');}
+ function renderRear(){q('#aura-temperature').textContent=s.temp.toFixed(1)+'°C';q('#aura-fan').textContent='FAN: '+s.fan;q('#aura-climate-sync').setAttribute('aria-pressed',String(s.sync));q('#aura-media-play').textContent=s.playing?'暫停':'播放';q('#aura-media-play').setAttribute('aria-pressed',String(s.playing));q('#aura-media-mute').setAttribute('aria-pressed',String(s.muted));q('#aura-media-mute').textContent=s.muted?'取消靜音':'靜音';q('#aura-media-track').textContent=tracks[s.track];q('#aura-media-time').textContent=Math.floor(s.mediaTime/60)+':'+String(s.mediaTime%60).padStart(2,'0')+' / 3:00 · 模擬播放，無音訊';q('#aura-media-progress').style.width=s.mediaTime/180*100+'%';q('#aura-call-status').textContent=s.call?'模擬請求已送出 · 未建立通話':'尚未發送';q('#aura-driver-call').textContent=s.call?'取消請求':'請求通話';}
+ qa('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+ qa('[data-filter]').forEach(b=>b.addEventListener('click',()=>{s.filter=b.dataset.filter;const first=places.find(p=>p.kind===s.filter);if(first)s.selected=first.id;renderPlaces();}));
+ q('#aura-send-proposal').addEventListener('click',()=>propose(selected(),'FRONT PASSENGER'));q('#aura-rear-propose').addEventListener('click',()=>propose({id:'rest-stop',name:'REST STOP',detour:3},'REAR'));q('#aura-example-proposal').addEventListener('click',()=>propose(places[0],'FRONT PASSENGER'));q('#aura-accept').addEventListener('click',()=>decide(true));q('#aura-decline').addEventListener('click',()=>decide(false));
+ q('#aura-driver-load').addEventListener('change',e=>{s.load=e.target.value;renderPolicy();result(s.load==='NORMAL'?'駕駛負荷恢復正常；待處理提案可由中控確認。':s.load==='HIGH'?'高負荷：提案延後，中控只顯示安靜邊緣標記。':'嚴重安全情境：中控安全資訊優先，提案保持延後。');});q('#aura-network').addEventListener('change',e=>{s.online=e.target.value==='online';renderPresence();result(s.online?'模擬網路已恢復；本預覽沒有呼叫外部 API。':'離線模式：本地示例與提案狀態保留，沒有即時地點搜尋。');});q('#aura-presence-control').addEventListener('change',e=>{s.presence=e.target.value;renderPresence();});
+ q('#aura-media-play').addEventListener('click',()=>{s.playing=!s.playing;renderRear();});q('#aura-media-next').addEventListener('click',()=>{s.track=(s.track+1)%tracks.length;s.mediaTime=0;renderRear();});q('#aura-media-mute').addEventListener('click',()=>{s.muted=!s.muted;renderRear();});q('#aura-temp-down').addEventListener('click',()=>{s.temp=Math.max(16,s.temp-.5);s.sync=false;renderRear();});q('#aura-temp-up').addEventListener('click',()=>{s.temp=Math.min(28,s.temp+.5);s.sync=false;renderRear();});q('#aura-fan').addEventListener('click',()=>{s.fan=s.fan%5+1;renderRear();});q('#aura-climate-sync').addEventListener('click',()=>{s.sync=!s.sync;if(s.sync)s.temp=22;renderRear();});q('#aura-driver-call').addEventListener('click',()=>{s.call=!s.call;renderRear();result(s.call?'後座發出本地模擬通話請求；沒有使用麥克風或建立實際通話。':'模擬通話請求已取消。');});
+ q('#aura-display-settings').addEventListener('click',()=>{q('#aura-settings-panel').hidden=!q('#aura-settings-panel').hidden;q('#aura-settings-note').textContent='只影響此預覽，不控制硬體。';});q('#aura-config-settings').addEventListener('click',()=>{q('#aura-settings-panel').hidden=false;q('#aura-settings-note').textContent='設定保存在本次本地預覽；重新載入後不保留。';});q('#aura-brightness').addEventListener('input',e=>{const v=Number(e.target.value);q('#aura-brightness-value').textContent=v+'%';q('#aura-panel-rear').style.filter='brightness('+v/100+')';});
+ qa('[data-center-action]').forEach(b=>b.addEventListener('click',()=>{if(s.load!=='NORMAL')return;const kind=b.dataset.centerAction;const text={navigation:['NAVIGATION','原始參考地圖＋模擬旅程。此預覽未接入即時導航或重算路線。'],radio:['RADIO · SIMULATED','FM 98.4 為示例。媒體操作可在後座預覽中測試，不播放實際音訊。'],climate:['FRONT CLIMATE · SIMULATED','前艙示例設定為 22.0°C AUTO。後座溫度可獨立調整；不控制真實車輛。'],phone:['PHONE · SIMULATED','連線狀態為示例，沒有建立實際電話或存取聯絡人。']}[kind];q('#aura-center-detail-title').textContent=text[0];q('#aura-center-detail-content').textContent=text[1];q('#aura-center-detail').hidden=false;}));q('#aura-center-detail-close').addEventListener('click',()=>q('#aura-center-detail').hidden=true);
+ q('#aura-reset-demo').addEventListener('click',()=>{s={...s,load:'NORMAL',online:true,presence:'IDLE',selected:'aquamarine',filter:'all',proposal:null,stops:[],playing:false,mediaTime:0,track:0,muted:false,temp:21.5,fan:3,sync:false,call:false};q('#aura-driver-load').value='NORMAL';q('#aura-network').value='online';q('#aura-presence-control').value='IDLE';q('#aura-brightness').value='100';q('#aura-brightness-value').textContent='100%';q('#aura-panel-rear').style.filter='';q('#aura-settings-panel').hidden=true;renderJourney();renderPolicy();renderRear();result('情境已重設；所有讀值與操作為本地模擬。');});
+ let lastTick=0;const mediaTimer=setInterval(()=>{if(!s.playing)return;const now=Date.now();if(lastTick&&now-lastTick>2000){lastTick=now;return;}lastTick=now;s.mediaTime++;if(s.mediaTime>=180){s.mediaTime=180;s.playing=false;}renderRear();},1000);
+ renderJourney();renderPolicy();renderRear();setView('center');
+})();
+</script>
+</div>
+</html>
