@@ -541,8 +541,23 @@ export interface JourneyRecommendationSummary {
   alternatives: JourneyRecommendationOptionSummary[];
 }
 
+export interface JourneyRequestFact {
+  status: "confirmed" | "unknown";
+  value: string | null;
+  source: "user_request" | "not_provided";
+}
+
+export interface JourneyRecommendationFacts {
+  passengerIdentity: JourneyRequestFact;
+  age: JourneyRequestFact;
+  disability: JourneyRequestFact;
+  mobilityNeed: JourneyRequestFact;
+  dropoffPreference: JourneyRequestFact;
+}
+
 export type JourneyRecommendationResultMessage = JourneyRecommendationResultBase & (
   | { status: "proposal"; centerProposal: ActionProposalRequest; recommendation: JourneyRecommendationSummary; reasonCode?: never }
+  | { status: "clarification_required"; clarification: { question: string; facts: JourneyRecommendationFacts; evidence: JourneyEvidenceSummary[]; simulated: boolean }; centerProposal?: never; recommendation?: never; reasonCode?: never }
   | { status: "abstained"; reasonCode: string; centerProposal?: never }
 );
 

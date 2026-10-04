@@ -63,6 +63,43 @@ export interface WholeJourneyEvidence {
   options: JourneyOption[];
 }
 
+export interface JourneyRequestAssessment {
+  facts: {
+    passengerIdentity: { status: "confirmed"; value: string; source: "user_request" } | { status: "unknown"; value: null; source: "not_provided" };
+    age: { status: "unknown"; value: null; source: "not_provided" };
+    disability: { status: "unknown"; value: null; source: "not_provided" };
+    mobilityNeed: { status: "unknown"; value: null; source: "not_provided" };
+    dropoffPreference: { status: "confirmed" | "unknown"; value: "prioritize" | "not_prioritize" | null; source: "user_request" | "not_provided" };
+  };
+  clarification: string | null;
+}
+
+/** Preserve what the request says; ask only if the unknown preference changes the evidence-based ordering. */
+export function assessJourneyRequest(requestText: string, options: JourneyOption[], now = Date.now()): JourneyRequestAssessment {
+  const negative = /(?:entrance|drop[- ]?off).{0,48}(?:not important|doesn't matter|no special preference)|(?:不需要|不用|不重要).{0,24}(?:入口|下車|下车)/i.test(requestText);
+  const positive = !negative && /(?:entrance|drop[- ]?off).{0,48}(?:important|matters|priorit|closer)|(?:重要|重視|靠近).{0,24}(?:入口|下車|下车)/i.test(requestText);
+  const value = positive ? "prioritize" : negative ? "not_prioritize" : null;
+  const ordinary = scoreJourneyOptions(options, now).selected?.placeId;
+  const prioritized = scoreJourneyOptions(options, now, { prioritizePassengerDropoff: true }).selected?.placeId;
+  const rankingChanges = ordinary !== prioritized;
+  const dropoffScenario = /\bmom\b|drop[- ]?off|\bget out\b|下車|下车/i.test(requestText);
+  const passengerMention = requestText.match(/\b(?:mom|mother|mum|dad|father|parent)\b|媽媽|媽|母親|爸爸|爸|父親/i)?.[0];
+  return {
+    facts: {
+      passengerIdentity: passengerMention
+        ? { status: "confirmed", value: passengerMention, source: "user_request" }
+        : { status: "unknown", value: null, source: "not_provided" },
+      age: { status: "unknown", value: null, source: "not_provided" },
+      disability: { status: "unknown", value: null, source: "not_provided" },
+      mobilityNeed: { status: "unknown", value: null, source: "not_provided" },
+      dropoffPreference: { status: value ? "confirmed" : "unknown", value, source: value ? "user_request" : "not_provided" },
+    },
+    clarification: dropoffScenario && value === null && rankingChanges
+      ? "Would proximity to an entrance or a passenger drop-off space change your choice?"
+      : null,
+  };
+}
+
 /** Implementations must return facts for the complete requested trip, never a transient search result alone. */
 export interface JourneyRecommendationEvidenceSource {
   getEvidence(input: {
@@ -251,10 +288,27 @@ export async function recommendWholeJourney(input: {
   );
   if (eligibleOptions.length === 0) return abstain("NO_CANDIDATE_WITH_FRESH_ROUTE_DETOUR_EVIDENCE");
 
-  const dropoffPreference = message.requestText;
-  const noDropoffPreference = /(?:entrance|drop[- ]?off).{0,48}(?:not important|doesn't matter|no special preference)|(?:不需要|不用|不重要).{0,24}(?:入口|下車|下车)/i.test(dropoffPreference);
+  const assessment = assessJourneyRequest(message.requestText, eligibleOptions, now);
+  if (assessment.clarification) {
+    const dropoffEvidence = eligibleOptions.flatMap((option) =>
+      usable(option.passengerDropoff, now) ? [evidenceSummaryItem("passengerDropoff", option.passengerDropoff)] : [],
+    );
+    return {
+      kind: "journey.recommendation.result",
+      protocolVersion: 1,
+      requestId: message.requestId,
+      traceId: message.traceId,
+      status: "clarification_required",
+      clarification: {
+        question: assessment.clarification,
+        facts: assessment.facts,
+        evidence: dropoffEvidence,
+        simulated: dropoffEvidence.some((item) => item.source === "simulated"),
+      },
+    };
+  }
   const recommendation = scoreJourneyOptions(eligibleOptions, now, {
-    prioritizePassengerDropoff: !noDropoffPreference && /(?:entrance|drop[- ]?off).{0,48}(?:important|matters|priorit|closer)|(?:重要|重視|靠近).{0,24}(?:入口|下車|下车)/i.test(dropoffPreference),
+    prioritizePassengerDropoff: assessment.facts.dropoffPreference.value === "prioritize",
   });
   if (!recommendation.selected || recommendation.score === null || !Number.isFinite(recommendation.score)) {
     return abstain("NO_FRESH_DECISION_EVIDENCE");

@@ -4,6 +4,14 @@
     "goal": "Find a place where it is convenient for Mom to get out, with charging nearby.",
     "clarification": "Does proximity to an entrance or a passenger drop-off space matter?",
     "clarificationState": "unknown until answered; do not infer age, disability, or mobility needs from Mom",
+    "requestFacts": {
+      "passengerReference": { "value": "Mom", "status": "confirmed", "source": "simulated user request" },
+      "age": { "value": null, "status": "unknown", "source": "not provided" },
+      "disability": { "value": null, "status": "unknown", "source": "not provided" },
+      "mobilityNeed": { "value": null, "status": "unknown", "source": "not provided" },
+      "entranceOrDropoffPreference": { "value": null, "status": "unknown", "source": "not provided" },
+      "inferredFacts": []
+    },
     "evidenceBoundary": "Every candidate, drop-off, charging, route, and freshness value in this fixture is simulated. The runtime fixture source rebases observations to request time and labels them simulated/fresh; this is not a live provider refresh.",
     "recoveryBeats": [
       "A critical safety signal interrupts the active secondary task in the story scenario.",

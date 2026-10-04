@@ -172,7 +172,9 @@ function buildClassificationPrompt(utterance: string): string {
   });
   const examples = [
     ["Raise the cabin volume", proposal("Increase cabin audio volume", "volume", "up")],
+    ["把車內音量調大", proposal("Increase cabin audio volume", "volume", "up")],
     ["Set the cabin temperature to 22 C", proposal("Set cabin temperature to 22 degrees", "temperature_celsius", 22)],
+    ["把冷氣溫度設為 22 度", proposal("Set cabin temperature to 22 degrees", "temperature_celsius", 22)],
     ["Make it cooler", { decision: "abstain", reason: "ambiguous" }],
     ["Find me a restaurant", { decision: "abstain", reason: "unsupported" }],
     ["Brake now and steer left", { decision: "abstain", reason: "out_of_scope" }],

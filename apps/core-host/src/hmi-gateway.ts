@@ -112,7 +112,7 @@ export class HmiGateway {
       this.refreshPresence();
       for (const client of this.clients) {
         if (!client.registration) continue;
-        const projected = projectDisplayEvent(event, client.registration.role, this.runtime.getState().activeProposals);
+        const projected = projectDisplayEvent(event, client.registration, this.runtime.getState().activeProposals);
         if (projected) this.send(client.socket, { kind: "event", event: projected });
       }
     });
@@ -415,7 +415,7 @@ export class HmiGateway {
     });
     this.send(client.socket, {
       kind: "snapshot",
-      snapshot: projectDisplaySnapshot(this.runtime.createSnapshot(registration.displayId, this.presence), registration.role),
+      snapshot: projectDisplaySnapshot(this.runtime.createSnapshot(registration.displayId, this.presence), registration),
     });
   }
 
@@ -569,7 +569,7 @@ export class HmiGateway {
       if (missed.length > 0) {
         const proposals = this.runtime.getState().activeProposals;
         for (const event of missed) {
-          const projected = projectDisplayEvent(event, client.registration.role, proposals);
+          const projected = projectDisplayEvent(event, client.registration, proposals);
           if (projected) this.send(client.socket, { kind: "event", event: projected });
         }
         return;
@@ -577,7 +577,7 @@ export class HmiGateway {
     }
     this.send(client.socket, {
       kind: "snapshot",
-      snapshot: projectDisplaySnapshot(this.runtime.createSnapshot(client.registration.displayId, this.presence), client.registration.role),
+      snapshot: projectDisplaySnapshot(this.runtime.createSnapshot(client.registration.displayId, this.presence), client.registration),
     });
   }
 
@@ -660,21 +660,24 @@ function normalizeWebSocketPath(path: string): string {
 }
 
 /** Center is the authorized surface for the full task plan and action ledger. */
-function projectDisplaySnapshot<T extends { state: { activeTasks: ActiveTask[]; activeProposals: ActionProposal[] } }>(snapshot: T, role: DisplayRole): T {
+function projectDisplaySnapshot<T extends { state: { activeTasks: ActiveTask[]; activeProposals: ActionProposal[] } }>(snapshot: T, registration: DisplayRegistration): T {
   return {
     ...snapshot,
     state: {
       ...snapshot.state,
-      activeTasks: role === "center" ? snapshot.state.activeTasks : snapshot.state.activeTasks.map(projectPublicTask),
-      activeProposals: snapshot.state.activeProposals.filter((proposal) => canSeeProposal(proposal, role)),
+      activeTasks: registration.role === "center" ? snapshot.state.activeTasks : snapshot.state.activeTasks.map(projectPublicTask),
+      activeProposals: snapshot.state.activeProposals.filter((proposal) => canSeeProposal(proposal, registration)),
     },
   } as T;
 }
 
-/** Passenger handoff needs a separate authorization record, which this protocol does not yet carry. */
-function canSeeProposal(proposal: ActionProposal, role: DisplayRole): boolean {
+function canSeeProposal(proposal: ActionProposal, registration: DisplayRegistration): boolean {
+  const { role } = registration;
   if (role === proposal.requestedByRole) return true;
-  return role === proposal.targetRole && (role === "center" || role === "cluster");
+  if (role === "center" || (role === "cluster" && role === proposal.targetRole)) return true;
+  // Proposal producers cannot mint passenger visibility grants. Until a trusted
+  // Center authorization command exists, passenger targets stay private.
+  return false;
 }
 
 function projectPublicTask(task: ActiveTask): ActiveTask {
@@ -689,17 +692,18 @@ function projectPublicTask(task: ActiveTask): ActiveTask {
 }
 
 /** Keep task events useful for display synchronization while removing private plan data. */
-function projectDisplayEvent(event: AuraDomainEvent, role: DisplayRole, proposals: readonly ActionProposal[]): AuraDomainEvent | null {
+function projectDisplayEvent(event: AuraDomainEvent, registration: DisplayRegistration, proposals: readonly ActionProposal[]): AuraDomainEvent | null {
+  const { role } = registration;
   switch (event.type) {
     case "proposal.created":
-      if (!canSeeProposal(event.payload.proposal, role)) return null;
+      if (!canSeeProposal(event.payload.proposal, registration)) return null;
       break;
     case "proposal.policy.decided":
-      if (!proposals.some((proposal) => proposal.proposalId === event.payload.decision.proposalId && canSeeProposal(proposal, role))) return null;
+      if (!proposals.some((proposal) => proposal.proposalId === event.payload.decision.proposalId && canSeeProposal(proposal, registration))) return null;
       break;
     case "proposal.consent.recorded":
     case "proposal.status.changed":
-      if (!proposals.some((proposal) => proposal.proposalId === event.payload.proposalId && canSeeProposal(proposal, role))) return null;
+      if (!proposals.some((proposal) => proposal.proposalId === event.payload.proposalId && canSeeProposal(proposal, registration))) return null;
       break;
   }
   if (role === "center") return event;

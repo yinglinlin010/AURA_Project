@@ -375,7 +375,13 @@ export class CoreRuntime {
     }
 
     const proposal: ActionProposal = {
-      ...structuredClone(request),
+      proposalId: request.proposalId,
+      kind: request.kind,
+      summary: request.summary,
+      targetRole: request.targetRole,
+      priority: request.priority,
+      requiresConsent: request.requiresConsent,
+      payload: structuredClone(request.payload),
       requestedByRole,
       createdAt: this.now(),
       status: "proposed",

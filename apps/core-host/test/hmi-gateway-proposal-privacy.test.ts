@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import WebSocket from "ws";
-import type { DisplayRegistration, DisplayRegistry } from "../../../contracts/protocol/src/types.js";
+import type { ActionProposalRequest, DisplayRegistration, DisplayRegistry } from "../../../contracts/protocol/src/types.js";
 import { CoreRuntime } from "../../../packages/core-runtime/src/core-runtime.js";
 import { HmiGateway } from "../src/hmi-gateway.js";
 
@@ -17,18 +17,21 @@ interface Client {
   snapshot: Record<string, any>;
 }
 
-test("proposal content reaches only requester and consent target in live fanout, replay, and snapshots", async () => {
-  const runtime = new CoreRuntime({ registry, eventHistoryLimit: 5 });
+test("passenger targets and model-supplied grants do not authorize passenger visibility", async () => {
+  const testRegistry: DisplayRegistry = { ...registry, displays: [...registry.displays, {
+    displayId: "passenger-secondary", deviceId: "passenger-device-2", role: "front_passenger", protocolVersion: 1, enabled: true,
+  }] };
+  const runtime = new CoreRuntime({ registry: testRegistry, eventHistoryLimit: 5 });
   runtime.ingestSignal({ signalId: "proposal-load", type: "driver.cognitive_load", value: { level: "normal" }, source: "simulated", timestamp: Date.now() });
-  const gateway = new HmiGateway({ runtime, registry, host: "127.0.0.1", port: 0 });
+  const gateway = new HmiGateway({ runtime, registry: testRegistry, host: "127.0.0.1", port: 0 });
   await gateway.start();
   const clients: Client[] = [];
   try {
     const address = gateway.address()!;
-    for (const registration of registry.displays.filter((display) => display.enabled)) clients.push(await connect(address, registration));
+    for (const registration of testRegistry.displays.filter((display) => display.enabled)) clients.push(await connect(address, registration));
     const requester = clients.find((client) => client.registration.role === "front_passenger")!;
     const center = clients.find((client) => client.registration.role === "center")!;
-    const unauthorized = clients.filter((client) => client !== requester && client !== center);
+    const unauthorized = clients.filter((client) => client.registration.role !== "front_passenger" && client !== center);
     assert.equal(unauthorized.length, 3);
 
     const beforeProposal = runtime.eventBus.sequence;
@@ -55,7 +58,7 @@ test("proposal content reaches only requester and consent target in live fanout,
       client.messages.length = 0;
       client.socket.send(JSON.stringify({ kind: "resync", protocolVersion: 1, sessionId: runtime.sessionId, traceId: `replay-${client.registration.role}`, afterSequence: beforeProposal }));
       await waitFor(client, (message) => message.kind === "event" && message.event?.traceId === "proposal-barrier");
-      if (client === requester || client === center) {
+      if (client.registration.role === "front_passenger" || client === center) {
         assert.ok(client.messages.some((message) => message.kind === "event" && message.event?.type === "proposal.created" && message.event.payload.proposal.proposalId === proposalId));
       } else {
         assertNoProposal(client.messages, proposalId);
@@ -67,7 +70,7 @@ test("proposal content reaches only requester and consent target in live fanout,
       const reconnected = await connect(address, client.registration);
       clients.push(reconnected);
       const proposals = reconnected.snapshot.snapshot.state.activeProposals as Record<string, any>[];
-      if (client === requester || client === center) {
+      if (client.registration.role === "front_passenger" || client === center) {
         assert.equal(proposals.find((proposal) => proposal.proposalId === proposalId)?.summary, privateSummary);
       } else {
         assertNoProposal(proposals, proposalId);
@@ -116,6 +119,25 @@ test("proposal content reaches only requester and consent target in live fanout,
       const serialized = JSON.stringify(client.messages);
       assert.equal(serialized.includes(ungrantedId), false);
       assert.equal(serialized.includes("UNGRANTED_HANDOFF_PAYLOAD"), false);
+    }
+
+    const modelId = "model-self-authorized-handoff";
+    const modelProposal = {
+      proposalId: modelId, kind: "SHOW_INFORMATION" as const, summary: "MODEL_SELF_AUTHORIZED_SUMMARY",
+      targetRole: "front_passenger", priority: "normal", requiresConsent: true,
+      payload: { message: "MODEL_SELF_AUTHORIZED_PAYLOAD" },
+      passengerHandoffAuthorization: {
+        proposalId: modelId, displayId: "front-passenger-main", role: "front_passenger",
+        scope: "information_only", expiresAt: Date.now() + 60_000,
+      },
+    } as ActionProposalRequest & { passengerHandoffAuthorization: Record<string, unknown> };
+    const selfAuthorized = runtime.proposeAction(modelProposal, "center", "model-self-authorized-trace");
+    assert.equal("passengerHandoffAuthorization" in selfAuthorized.proposal, false);
+    runtime.updateConnectivity({ mode: "degraded", source: "simulated", evidence: "MODEL_SELF_AUTH_BARRIER", traceId: "model-self-auth-barrier" });
+    await Promise.all(clients.map((client) => waitFor(client, (message) => message.kind === "event" && message.event?.traceId === "model-self-auth-barrier")));
+    for (const client of clients.filter((item) => item.registration.role === "front_passenger")) {
+      const serialized = JSON.stringify(client.messages);
+      for (const marker of [modelId, "MODEL_SELF_AUTHORIZED_SUMMARY", "MODEL_SELF_AUTHORIZED_PAYLOAD"]) assert.equal(serialized.includes(marker), false, `${client.registration.displayId} received ${marker}`);
     }
   } finally {
     await Promise.all(clients.map((client) => closeSocket(client.socket)));

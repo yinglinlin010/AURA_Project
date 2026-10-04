@@ -23,7 +23,7 @@ export interface LocalWhisperVoiceAdapterOptions {
   language?: string;
   platform?: NodeJS.Platform;
   runner?: VoiceProcessRunner;
-  candidateForTranscript?: (text: string) => unknown;
+  candidateForTranscript?: (text: string, traceId: string, signal: AbortSignal) => unknown | Promise<unknown>;
   maxUtteranceBytes?: number;
   silenceMs?: number;
   silenceRmsThreshold?: number;
@@ -52,7 +52,7 @@ export class LocalWhisperVoiceAdapter implements VoiceProvider {
   private readonly language: string;
   private readonly platform: NodeJS.Platform;
   private readonly runner: VoiceProcessRunner;
-  private readonly candidateForTranscript: ((text: string) => unknown) | undefined;
+  private readonly candidateForTranscript: ((text: string, traceId: string, signal: AbortSignal) => unknown | Promise<unknown>) | undefined;
   private readonly maxUtteranceBytes: number;
   private readonly silenceMs: number;
   private readonly silenceRmsThreshold: number;
@@ -181,8 +181,8 @@ export class LocalWhisperVoiceAdapter implements VoiceProvider {
       const transcript = asr.stdout.toString("utf8").trim().replace(/^\[[^\]]+\]\s*/gm, "").trim();
       if (!transcript) throw new Error("LOCAL_VOICE_EMPTY_TRANSCRIPT");
       this.emit({ type: "input_transcription", text: transcript, isFinal: true });
-      const candidate = this.candidateForTranscript?.(transcript);
-      if (candidate !== undefined) this.emit({ type: "proposal_candidate", candidate, traceId: this.traceId });
+      const candidate = await this.candidateForTranscript?.(transcript, this.traceId, controller.signal);
+      if (candidate !== undefined) this.emit({ type: "proposal_candidate", candidate, traceId: this.traceId, route: "local" });
       const response = `I heard: ${transcript}`;
       this.emit({ type: "output_transcription", text: response });
       const aiffPath = join(directory, "response.aiff");

@@ -37,6 +37,14 @@ test("local speech passes PCM to whisper and emits transcript plus converted PCM
   const { directory, model } = await fixture();
   const commands: Array<{ command: string; args: readonly string[] }> = [];
   const spoken = "turn volume up; $(touch /tmp/not-executed)";
+  const candidate = {
+    kind: "CHANGE_CABIN_SETTING",
+    summary: "Increase cabin audio volume",
+    targetRole: "center",
+    priority: "normal",
+    requiresConsent: true,
+    payload: { setting: "volume", direction: "up" },
+  };
   const runner: VoiceProcessRunner = {
     async run(command, args) {
       commands.push({ command, args });
@@ -52,7 +60,7 @@ test("local speech passes PCM to whisper and emits transcript plus converted PCM
       return { ...ok(), exitCode: 127 };
     },
   };
-  const adapter = new LocalWhisperVoiceAdapter({ modelPath: model, whisperCli: "whisper tool", sayCommand: "say tool", afconvertCommand: "afconvert tool", sayVoice: "Ting-Ting", platform: "darwin", runner, silenceMs: 100 });
+  const adapter = new LocalWhisperVoiceAdapter({ modelPath: model, whisperCli: "whisper tool", sayCommand: "say tool", afconvertCommand: "afconvert tool", sayVoice: "Ting-Ting", platform: "darwin", runner, silenceMs: 100, candidateForTranscript: async (text) => { assert.equal(text, spoken); await Promise.resolve(); return candidate; } });
   const events: Array<Record<string, unknown>> = [];
   adapter.subscribe((event) => events.push(event));
   try {
@@ -62,6 +70,7 @@ test("local speech passes PCM to whisper and emits transcript plus converted PCM
     await waitFor(events as Array<{ type: string }>, "turn_complete");
 
     assert.equal(events.find((event) => event.type === "input_transcription")?.text, spoken);
+    assert.deepEqual(events.find((event) => event.type === "proposal_candidate"), { type: "proposal_candidate", candidate, traceId: "local-test", route: "local" });
     assert.equal(events.find((event) => event.type === "output_transcription")?.text, `I heard: ${spoken}`);
     const audio = events.find((event) => event.type === "audio_chunk");
     assert.deepEqual(audio?.data, Buffer.from([1, 0, 2, 0, 3, 0, 4, 0]));

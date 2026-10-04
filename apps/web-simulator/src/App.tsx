@@ -1,13 +1,16 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import clusterReference from '../../../AURA_UI_UX_Handoff/images/01_cluster_display_final.jpg';
-import passengerReference from '../../../AURA_UI_UX_Handoff/images/03_passenger_display_final.jpg';
-import windowReference from '../../../AURA_UI_UX_Handoff/images/05_interactive_window_final.jpg';
+import { useEffect, useState, type ReactNode } from 'react';
+import windowReference from './assets/window-rainy-alpine.webp';
+import aquamarinePhoto from './assets/dining/aquamarine.jpg';
+import flamePhoto from './assets/dining/the-flame.jpg';
+import auroraPhoto from './assets/dining/aurora.jpg';
+import terraPhoto from './assets/dining/terra.jpg';
 import { resolveBrand } from '../../../packages/core-domain/src/brand';
 import { resolvePresentation } from '../../../packages/core-domain/src/presentation-resolver';
 import type { PresenceSnapshot } from '../../../contracts/protocol/src/types';
 import { DISPLAY_REGISTRATIONS, useAuraCommand, type DiscoveryState, type GatewayState, type JourneyRecommendationState, type RecommendationProposal, type SharedProposal, type SharedSafetyWarning, type SharedStop, type TransientPlace } from './core/useAuraCommand';
 import { CenterTaskPanel } from './CenterTaskPanel';
 import { AssistanceTimingPanel } from './AssistanceTimingPanel';
+import { ClusterDisplay } from './ClusterDisplay';
 import type { ActiveTask, TaskLifecycleCommand } from '../../../contracts/protocol/src/types';
 import './App.css';
 
@@ -17,7 +20,7 @@ const BRAND = resolveBrand({
   wakeWord: import.meta.env.VITE_AURA_WAKE_WORD,
 });
 
-type IconName = 'play' | 'pause' | 'back' | 'next' | 'phone' | 'seat' | 'display' | 'settings' | 'pin' | 'route' | 'sun' | 'cloud' | 'mic' | 'check' | 'close' | 'signal';
+type IconName = 'play' | 'pause' | 'back' | 'next' | 'arrow-up' | 'phone' | 'seat' | 'display' | 'settings' | 'pin' | 'route' | 'sun' | 'cloud' | 'rain' | 'mic' | 'check' | 'close' | 'signal';
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -25,6 +28,7 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
     pause: <><path d="M8 5v14" /><path d="M16 5v14" /></>,
     back: <><path d="m15 5-7 7 7 7" /><path d="M9 12h11" /></>,
     next: <><path d="m9 5 7 7-7 7" /><path d="M4 12h11" /></>,
+    'arrow-up': <><path d="M12 20V4" /><path d="m5 11 7-7 7 7" /></>,
     phone: <path d="M7 3h3l2 5-2 2a15 15 0 0 0 4 4l2-2 5 2v3c0 1-1 2-2 2C10 18 5 13 4 5c0-1 1-2 3-2Z" />,
     seat: <><path d="M7 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z" /><path d="M6 9v4l-2 5h11l-2-5-1-4H6Z" /><path d="M14 11h4l2 7h-6" /></>,
     display: <><rect x="3" y="4" width="18" height="13" rx="1" /><path d="M8 21h8M12 17v4" /></>,
@@ -33,6 +37,7 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
     route: <><circle cx="6" cy="18" r="2" /><circle cx="18" cy="6" r="2" /><path d="M8 18h3a3 3 0 0 0 3-3V9a3 3 0 0 1 3-3" /></>,
     sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
     cloud: <path d="M7 18a4 4 0 0 1-.5-8A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9H7Z" />,
+    rain: <><path d="M7 15a4 4 0 0 1-.5-8A6 6 0 0 1 18 6a4.5 4.5 0 0 1-.5 9H7Z" /><path d="m8 18-1 3m6-3-1 3m6-3-1 3" /></>,
     mic: <><rect x="9" y="3" width="6" height="12" rx="3" /><path d="M5 11a7 7 0 0 0 14 0m-7 7v3m-4 0h8" /></>,
     check: <path d="m5 12 4 4L19 6" />,
     close: <><path d="m6 6 12 12M18 6 6 18" /></>,
@@ -55,51 +60,6 @@ function PresenceBadge({ presence }: { presence: PresenceSnapshot | null }) {
 
 function ScreenHeading({ title, details, gatewayStatus, presence, windowExamples = false }: { title: string; details: string; gatewayStatus: string; presence: PresenceSnapshot | null; windowExamples?: boolean }) {
   return <div className="screen-heading"><h1>{title}</h1><span className="screen-heading-meta"><span>{details} · Gateway {gatewayStatus}</span><PresenceBadge presence={presence}/>{windowExamples && <small className="window-example-label">SIMULATED EXAMPLES</small>}</span></div>;
-}
-
-const TIRE_PRESSURE_EXAMPLES = [
-  { position: 'FL', pressureBar: 2.4 },
-  { position: 'FR', pressureBar: 2.4 },
-  { position: 'RL', pressureBar: 2.5 },
-  { position: 'RR', pressureBar: 2.5 },
-] as const;
-
-function Gauge({ type }: { type: 'rpm' | 'power' }) {
-  const start = type === 'rpm' ? 135 : 135;
-  const end = type === 'rpm' ? 285 : 405;
-  const point = (radius: number, angle: number) => {
-    const radians = (angle * Math.PI) / 180;
-    return { x: 100 + radius * Math.cos(radians), y: 100 + radius * Math.sin(radians) };
-  };
-  const first = point(76, start);
-  const last = point(76, end);
-  const largeArc = end - start > 180 ? 1 : 0;
-  const marks = type === 'rpm' ? Array.from({ length: 8 }, (_, index) => ({ angle: start + ((end - start) * index) / 7, label: String(index) })) : [
-    { angle: start, label: '0' }, { angle: (start + end) / 2, label: '50' }, { angle: end, label: '100' },
-  ];
-  return <svg className={`instrument-gauge ${type}`} viewBox="0 0 200 200" aria-hidden="true">
-    <path className="gauge-track" d={`M ${first.x} ${first.y} A 76 76 0 ${largeArc} 1 ${last.x} ${last.y}`}/>
-    {marks.map(({ angle, label }) => {
-      const outer = point(82, angle); const inner = point(68, angle); const labelPoint = point(94, angle);
-      return <g key={`${angle}-${label}`}><path className="gauge-tick" d={`M ${inner.x} ${inner.y} L ${outer.x} ${outer.y}`}/><text x={labelPoint.x} y={labelPoint.y} textAnchor="middle" dominantBaseline="middle">{label}</text></g>;
-    })}
-  </svg>;
-}
-
-function Cluster({ speedKph, warning, presentation, motionPaused }: { speedKph: number; warning: SharedSafetyWarning | null; presentation: ReturnType<typeof resolvePresentation>; motionPaused: boolean }) {
-  const densityClass = presentation.informationDensity === 'reduced' ? 'load-reduced' : presentation.informationDensity === 'safety_only' ? 'load-critical' : '';
-  const markerDuration = `${Math.max(250, 3000 / Math.max(1, speedKph))}ms`;
-  return <section className={`device cluster-device ${densityClass} ${warning ? 'safety-active' : ''}`} aria-label="Cluster display preview">
-      <div className="cluster-head"><span>14:38&nbsp;&nbsp; 21°C</span><span className="drive-mode">DRIVE</span><span className="indicator-lights" style={{ backgroundImage: `url(${clusterReference})` }} role="img" aria-label="Illustrative reference headlight and seatbelt telltales" title="Illustrative reference telltales"/></div>
-    {warning && <div className="cluster-safety-warning" role="alert" aria-live="assertive"><b>CRITICAL SAFETY WARNING</b><span>Immediate safety condition · {warning.source === 'simulated' ? 'SIMULATED' : warning.source.toUpperCase()}</span></div>}
-    <div className="cluster-main">
-      <aside className="trip-readout"><p><span>Trip</span><b>24.8 km</b></p><p><span>Avg</span><b>16.1 kWh/100km</b></p><p><span>Time</span><b>0:42h</b></p><p><span>Range</span><b>412 km</b></p></aside>
-      <div className="rpm-gauge"><Gauge type="rpm"/><span className="gauge-label">RPM · SIM EXAMPLE</span><strong>4200</strong></div>
-      <div className="speed-readout"><strong>{Math.round(speedKph)}</strong><span>km/h</span><div className="road-markers" style={{ '--marker-duration': markerDuration, '--marker-play-state': speedKph > 0 && !motionPaused ? 'running' : 'paused' } as CSSProperties}><i/><b/><em/></div><div className="car-silhouette-reference" style={{ backgroundImage: `url(${clusterReference})` }} aria-hidden="true"/></div>
-      <div className="power-gauge"><Gauge type="power"/><span className="gauge-label">Power · SIM EXAMPLE</span><strong>68%</strong></div>
-      <aside className="vehicle-readout" aria-label="Four independent simulated tire pressure examples"><div className="car-top-reference" style={{ backgroundImage: `url(${clusterReference})` }} aria-hidden="true"/><div className="tire-pressure-grid">{TIRE_PRESSURE_EXAMPLES.map((tire) => <span key={tire.position}><b>{tire.position}</b> {tire.pressureBar.toFixed(1)} bar</span>)}</div><span className="cluster-example-label">SIMULATED FIXTURES</span><span>Temp · meaning unspecified</span></aside>
-    </div>
-  </section>;
 }
 
 function RouteMap() {
@@ -236,13 +196,9 @@ function CenterDisplay({ proposals, journeyStops, connection, warning, presentat
   </section>;
 }
 
-const samplePlaces = [
-  { name: 'The Flame', style: 'Modern grill', rating: '4.9', distance: '0.4 mi' },
-  { name: 'Aurora', style: 'Italian', rating: '4.7', distance: '1.2 mi' },
-  { name: 'Terra', style: 'Plant-forward', rating: '4.6', distance: '1.8 mi' },
-];
 
-function PassengerDisplay({ onProposal, proposal, connection, connectivity, discovery, searchPlaces, previewRoute }: {
+
+function PassengerDisplay({ onProposal: _onProposal, proposal: _proposal, connection: _connection, connectivity: _connectivity, discovery: _discovery, searchPlaces: _searchPlaces, previewRoute: _previewRoute }: {
   onProposal: (place: TransientPlace, route: DiscoveryState['route']['routes'][number], originLabel: string) => void;
   proposal?: SharedProposal;
   connection: { status: string; lastMessage: string };
@@ -251,110 +207,159 @@ function PassengerDisplay({ onProposal, proposal, connection, connectivity, disc
   searchPlaces: (slot: 'origin' | 'destination', query: string) => boolean;
   previewRoute: (origin: TransientPlace, destination: TransientPlace) => boolean;
 }) {
-  const [originQuery, setOriginQuery] = useState('');
-  const [placeQuery, setPlaceQuery] = useState('');
-  const [origin, setOrigin] = useState<TransientPlace | null>(null);
-  const [destination, setDestination] = useState<TransientPlace | null>(null);
-  const [previewSelection, setPreviewSelection] = useState('');
   const [filter, setFilter] = useState('All');
-  const [searchedOriginQuery, setSearchedOriginQuery] = useState('');
-  const [searchedDestinationQuery, setSearchedDestinationQuery] = useState('');
-  const filters = ['All', 'Fine dining', 'Bistros', 'Cafés'];
-  const filterQuery = filter === 'All' ? '' : filter === 'Cafés' ? 'cafe' : filter === 'Bistros' ? 'bistro' : 'fine dining restaurant';
-  const destinationQuery = [placeQuery.trim(), filterQuery].filter(Boolean).join(' ');
-  const originSearchCurrent = Boolean(originQuery.trim()) && searchedOriginQuery === originQuery.trim();
-  const destinationSearchCurrent = Boolean(destinationQuery) && searchedDestinationQuery === destinationQuery;
-  const canSearchLive = connection.status === 'connected' && connectivity.mode !== 'offline';
-  const originResults = originSearchCurrent ? discovery.origin.results : [];
-  const destinationResults = destinationSearchCurrent ? discovery.destination.results : [];
-  const currentSelection = origin && destination ? `${origin.placeId}:${destination.placeId}` : '';
-  const routeMatchesSelection = Boolean(currentSelection && previewSelection === currentSelection);
-  const selectedRoute = routeMatchesSelection ? discovery.route.routes[0] : undefined;
-  const illustrativeRows = samplePlaces.map((place, index) => <article key={place.name} className={`place-row place-art-${index + 1}`}><span className="dish-art" aria-hidden="true"><i/><b/><em/></span><span className="place-copy"><b>{place.name}</b><small>{place.style}</small><span>{place.rating} ★ <i>·</i> {place.distance} · SIMULATED</span></span></article>);
-  const canPropose = connectivity.mode !== 'offline' && routeMatchesSelection && discovery.route.status === 'available' && discovery.route.freshness === 'fresh' && Boolean(selectedRoute);
-  const proposalPending = Boolean(proposal && !['declined', 'rejected', 'completed'].includes(proposal.status));
-  const searchStatus = (slot: 'origin' | 'destination') => {
-    const result = discovery[slot];
-    if (result.status === 'loading') return 'Searching Mapbox…';
-    if (result.status === 'unavailable') return 'Place search unavailable. Check provider configuration.';
-    if (result.status === 'error') return `Search failed: ${result.errorCode ?? 'provider error'}`;
-    if (result.status === 'available' && result.results.length === 0) return 'No places returned by provider.';
-    return '';
-  };
-  const formatObserved = (value: number) => new Date(value).toLocaleTimeString();
-  const routeButtonLabel = discovery.route.status === 'loading' && routeMatchesSelection ? 'Calculating…'
-    : canPropose ? 'Propose route review' : 'Preview route';
-  const handleRouteAction = () => {
-    if (canPropose && destination && selectedRoute) {
-      onProposal(destination, selectedRoute, origin?.displayName ?? '');
-      return;
-    }
-    if (origin?.location && destination?.location) {
-      setPreviewSelection(`${origin.placeId}:${destination.placeId}`);
-      previewRoute(origin, destination);
-    }
-  };
+  const filters = ['All', 'Fine dining', 'Cafés', 'Vegan'];
 
-  useEffect(() => {
-    if (connection.status === 'error' || connection.status === 'disconnected') {
-      setOrigin(null);
-      setDestination(null);
-      setPreviewSelection('');
-      setSearchedOriginQuery('');
-      setSearchedDestinationQuery('');
-    }
-  }, [connection.status]);
+  const samplePlaces = [
+    { name: 'THE FLAME', style: 'Modern · ★ 4.9 · +4 min', image: flamePhoto },
+    { name: 'AURORA', style: 'Café · ★ 4.7 · +3 min', image: auroraPhoto },
+    { name: 'TERRA', style: 'Vegan · ★ 4.6 · +6 min', image: terraPhoto },
+  ];
 
   return <section className="device passenger-device" aria-label="Front passenger display preview">
-    <aside className="discovery-sidebar"><h2>Dining<br/>Guide</h2><h3>Local flavor</h3><p>Search a route origin and dining stop. Vehicle position is not inferred.</p>
-      <label className="discovery-field">Route origin<input value={originQuery} maxLength={256} onChange={(event) => { setOriginQuery(event.target.value); setOrigin(null); setSearchedOriginQuery(''); setPreviewSelection(''); }} placeholder="Search a starting place" /></label>
-      <button className="discovery-search-button" onClick={() => { if (!canSearchLive) return; setOrigin(null); setSearchedOriginQuery(originQuery.trim()); setPreviewSelection(''); searchPlaces('origin', originQuery); }} disabled={!canSearchLive || !originQuery.trim() || discovery.origin.status === 'loading'}>Search origin</button>
-      {originResults.length > 0 && <label className="origin-choice">Choose route origin<select aria-label="Choose route origin" value={origin?.placeId ?? ''} onChange={(event) => { setOrigin(originResults.find((place) => place.placeId === event.target.value) ?? null); setPreviewSelection(''); }}><option value="">Select a search result</option>{originResults.map((place) => <option key={place.placeId} value={place.placeId}>{place.displayName} · API · {place.freshness.toUpperCase()}</option>)}</select></label>}
-      {origin && <small className="origin-provenance">{origin.source.toUpperCase()} · {origin.freshness.toUpperCase()} · {formatObserved(origin.observedAt)} · {origin.attribution}</small>}
-      {originSearchCurrent && searchStatus('origin') && <p className="discovery-message" role="status">{searchStatus('origin')}</p>}
-      <div className="side-rule"/><h3>Filter &amp; search</h3>
-      <label className="discovery-field">Dining place<input value={placeQuery} maxLength={232} onChange={(event) => { setPlaceQuery(event.target.value); setDestination(null); setSearchedDestinationQuery(''); setPreviewSelection(''); }} placeholder="Restaurant or destination" /></label>
-      <div className="filters" aria-label="Dining search refinement">{filters.map((item) => <button type="button" key={item} className={filter === item ? 'filter selected' : 'filter'} aria-pressed={filter === item} onClick={() => { setFilter(item); if (item !== 'All') setPlaceQuery((current) => current.slice(0, 232)); setDestination(null); setSearchedDestinationQuery(''); setPreviewSelection(''); }}>{item}</button>)}</div>
-      <button className="discovery-search-button" onClick={() => { if (!canSearchLive) return; setDestination(null); setSearchedDestinationQuery(destinationQuery); setPreviewSelection(''); searchPlaces('destination', destinationQuery); }} disabled={!canSearchLive || !placeQuery.trim() || discovery.destination.status === 'loading'}>{connectivity.mode === 'offline' ? 'Offline · examples only' : 'Search places'}</button>
+    <aside className="discovery-sidebar">
+      <h2>DINING<br/>GUIDE</h2>
+
+      <div className="sidebar-section">
+        <h3>LOCAL FLAVOR</h3>
+        <p>Explore places along your journey.</p>
+      </div>
+
+      <div className="sidebar-section">
+        <h3>CURATED SPOTS</h3>
+        <p>Compare cuisine and simulated journey impact.</p>
+      </div>
+
+      <div className="side-rule" />
+
+      <div className="sidebar-section">
+        <h3>FILTER &amp; SEARCH</h3>
+        <div className="vertical-filters">
+          {filters.map((item) => (
+            <button
+              type="button"
+              key={item}
+              className={filter === item ? 'filter-btn selected' : 'filter-btn'}
+              onClick={() => setFilter(item)}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      </div>
     </aside>
-    <div className="discovery-main"><div className="discovery-top"><span>Along your route · Dining · Gateway {connection.status}</span>{connectivity.mode !== 'online' && <span className="passenger-network-state" role="status">{connectivity.mode === 'offline' ? 'OFFLINE · LOCAL EXAMPLES' : 'DEGRADED · CHECK SOURCE FRESHNESS'}</span>}<StatusBar time="16:03"/></div>
-      <div className="featured-place"><div className="feature-art"><img src={passengerReference} alt="Illustrative restaurant preview"/><span className="illustrative-photo-tag">Illustrative photo</span><div className="feature-caption"><span>{destination ? `${destination.provider} · API result` : 'Illustrative example'}</span><b>{destination?.displayName ?? 'Aquamarine'}</b><small>{destination?.formattedAddress ?? 'Mediterranean · example content'}</small></div></div>
-        <div className="feature-details"><div><span>{connectivity.mode === 'offline' ? 'OFFLINE · Showing local examples only; route lookup is disabled.' : selectedRoute && discovery.route.status === 'available' ? `${(selectedRoute.distanceMeters / 1000).toFixed(1)} km · ${(selectedRoute.durationSeconds / 60).toFixed(0)} min · ${discovery.route.freshness?.toUpperCase()} · observed ${formatObserved(selectedRoute.observedAt)}` : origin && destination && (!origin.location || !destination.location) ? 'Selected result has no route coordinates. Choose another place.' : origin && destination ? `From ${origin.displayName} · ${discovery.route.errorCode ?? 'route preview not yet requested'}` : 'Choose a route origin and a place to preview distance and time.'}</span><b>{origin && destination ? `${origin.displayName} → ${destination.displayName}` : 'Route preview'}</b></div><button type="button" onClick={handleRouteAction} disabled={!canSearchLive || !origin?.location || !destination?.location || (!canPropose && discovery.route.status === 'loading') || (canPropose && proposalPending)}>{routeButtonLabel}</button></div>
-        {routeMatchesSelection && (discovery.route.status === 'error' || discovery.route.status === 'unavailable') && <p className="discovery-message route-error" role="status">{discovery.route.status === 'unavailable' ? `Route provider unavailable: ${discovery.route.errorCode ?? 'not configured'}.` : `Route preview failed: ${discovery.route.errorCode ?? 'provider error'}.`}</p>}
-        {selectedRoute && discovery.route.status === 'available' && <small className="route-provenance">{discovery.route.provider} · {discovery.route.source?.toUpperCase()} · {discovery.route.freshness?.toUpperCase()} · {discovery.route.attribution} · <a href={discovery.route.attributionUrl ?? undefined} target="_blank" rel="noreferrer">Attribution</a> · review only, journey unchanged</small>}
-        {proposal && <p className="passenger-proposal-status">Center proposal: {proposalStateLabel(proposal)}</p>}
+
+    <div className="discovery-main">
+      <div className="discovery-top">
+        <span className="time-display">16:03</span>
+        <span className="status-display">AURA · IDLE EXAMPLE PLACES</span>
       </div>
-      <div className="place-heading"><h3>{destinationResults.length > 0 ? 'Near the next stop' : 'Curated spots'}</h3><span>{destinationResults.length > 0 ? `Mapbox · ${destinationResults.length} results · temporary use` : !destinationSearchCurrent ? 'Illustrative examples' : 'Search status below'}</span></div>
+
+      <div className="featured-place">
+        <div className="feature-art">
+          <img src={aquamarinePhoto} alt="Aquamarine restaurant"/>
+        </div>
+        <div className="feature-caption-overlay">
+          <div className="feature-text">
+            <b>AQUAMARINE</b>
+            <small>Mediterranean · ★ 4.8 · 繞路 +5 min</small>
+          </div>
+          <button className="propose-button" onClick={() => {}}>提議停靠</button>
+        </div>
+      </div>
+
       <div className="place-list">
-        {destinationResults.length > 0 ? destinationResults.slice(0, 3).map((place, index) => <button type="button" key={place.placeId} className={`place-row place-art-${index + 1} ${destination?.placeId === place.placeId ? 'active' : ''}`} aria-pressed={destination?.placeId === place.placeId} onClick={() => { setDestination(place); setPreviewSelection(''); }}><span className="dish-art" aria-hidden="true"><i/><b/><em/></span><span className="place-copy"><b>{place.displayName}</b><small>{place.formattedAddress ?? (place.types.join(' · ') || 'Address unavailable')}</small><span>{place.provider} · {place.source.toUpperCase()} · {place.freshness.toUpperCase()} · {formatObserved(place.observedAt)}</span><small>{place.attribution} · temporary use</small></span></button>)
-          : !destinationSearchCurrent ? illustrativeRows
-            : discovery.destination.status === 'loading' ? <div className="place-empty" role="status">Searching places from the selected provider…</div>
-              : discovery.destination.status === 'unavailable' || discovery.destination.status === 'error' ? <div className="place-empty" role="status">{searchStatus('destination')} Check the query or provider configuration and try again.</div>
-                : discovery.destination.status === 'available' ? <div className="place-empty" role="status">No places matched this search. Try a broader phrase or another cuisine.</div>
-                : illustrativeRows}
+        {samplePlaces.map((place) => (
+          <article key={place.name} className={`place-card`}>
+            <div className="place-info">
+              <b>{place.name}</b>
+              <small>{place.style}</small>
+            </div>
+            <img src={place.image} alt={place.name} className="place-image" />
+          </article>
+        ))}
       </div>
-      {connection.status !== 'connected' && <p className="discovery-message passenger-connection-state" role="status">Passenger gateway {connection.status}: {connection.lastMessage}</p>}
+
+      <div className="passenger-footer">
+        示例地點；需駕駛同意，才會加入模擬行程。
+      </div>
     </div>
   </section>;
 }
 
-function RearDisplay({ onRestStopProposal, proposal }: { onRestStopProposal: () => void; proposal?: SharedProposal }) {
+function RearDisplay({ onRestStopProposal }: { onRestStopProposal: () => void; proposal?: SharedProposal }) {
   const [temperature, setTemperature] = useState(21.5);
-  const [playing, setPlaying] = useState(false);
-  const [talking, setTalking] = useState(false);
-  const [settings, setSettings] = useState(false);
   return <section className="device rear-device" aria-label="Rear display preview">
-    <div className="rear-tile media-tile"><h3>Media player</h3><div className="media-controls"><button aria-label={playing ? 'Pause' : 'Play'} onClick={() => setPlaying(!playing)}><Icon name={playing ? 'pause' : 'play'} size={23}/></button><button aria-label="Previous track"><Icon name="back" size={25}/></button><button aria-label="Next track"><Icon name="next" size={25}/></button></div><p>Music &amp; audio</p><span className="track-name">{playing ? 'Now Playing' : 'Ready to play'} · The Midnight Echo</span><div className="track-progress"><i className={playing ? 'playing' : ''}/></div></div>
-    <div className="rear-tile climate-tile"><h3>Climate control</h3><span className="tile-label">Zone temp</span><div className="temperature"><button aria-label="Lower temperature" onClick={() => setTemperature(Math.max(16, temperature - 0.5))}><Icon name="back"/></button><strong>{temperature.toFixed(1)}°C</strong><button aria-label="Raise temperature" onClick={() => setTemperature(Math.min(28, temperature + 0.5))}><Icon name="next"/></button></div><div className="climate-footer"><span>Fan speed: 3</span><span>Auto</span><button className="sync-button">Sync</button></div></div>
-    <div className="rear-tile communication-tile"><h3>Rear seat comm.</h3><div className="comm-row"><Icon name="phone" size={26}/><div><b>Driver call</b><span>{talking ? 'Simulated request active' : 'No call connected · simulated'}</span></div><button onClick={() => setTalking(!talking)}>{talking ? 'Cancel' : 'Request'}</button></div><div className="comm-row"><Icon name="seat" size={26}/><div><b>Journey request</b><span>{proposal ? proposalStateLabel(proposal) : 'Driver approval required · simulated'}</span></div><button disabled={Boolean(proposal && ['proposed', 'routed', 'awaiting_consent', 'deferred', 'executing'].includes(proposal.status))} onClick={onRestStopProposal}>Propose stop</button></div></div>
-    <div className="rear-tile settings-tile"><h3>System settings</h3>{settings ? <div className="settings-options"><button onClick={() => setSettings(false)}>Display &amp; audio</button><button onClick={() => setSettings(false)}>Configuration</button><span>Brightness&nbsp; · &nbsp;70%</span></div> : <><button className="setting-row" onClick={() => setSettings(true)}><Icon name="display" size={25}/><span><b>Display &amp; audio</b><small>Current settings</small></span></button><button className="setting-row" onClick={() => setSettings(true)}><Icon name="settings" size={25}/><span><b>Configuration</b><small>Current settings</small></span></button></>}</div>
+    <div className="rear-tile media-tile">
+      <h3>MEDIA PLAYER</h3>
+      <p>MUSIC &amp; AUDIO</p>
+      <span className="track-name">The Midnight Echo</span>
+      <div className="media-controls">
+        <button aria-label="Shuffle"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
+        <button aria-label="Previous track"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg></button>
+        <button aria-label="Play" className="play-button"><svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+        <button aria-label="Next track"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg></button>
+        <button aria-label="Repeat"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg></button>
+        <button aria-label="Volume"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></button>
+      </div>
+      <div className="track-progress"><i className="playing"/></div>
+      <div className="media-footer">0:00 / 3:00 • SIMULATED • NO AUDIO</div>
+    </div>
+    <div className="rear-tile climate-tile">
+      <h3>CLIMATE CONTROL</h3>
+      <span className="tile-label">REAR ZONE TEMP</span>
+      <div className="temperature">
+        <button aria-label="Lower temperature" onClick={() => setTemperature(Math.max(16, temperature - 0.5))}><Icon name="back" size={24}/></button>
+        <strong>{temperature.toFixed(1)}°C</strong>
+        <button aria-label="Raise temperature" onClick={() => setTemperature(Math.min(28, temperature + 0.5))}><Icon name="next" size={24}/></button>
+      </div>
+      <div className="climate-footer">
+        <button className="outline-button">FAN: 3</button>
+        <button className="outline-button">SYNC</button>
+        <span className="simulated-text">SIMULATED</span>
+      </div>
+    </div>
+    <div className="rear-tile communication-tile">
+      <h3>REAR SEAT COMM.</h3>
+      <div className="comm-row">
+        <div>
+          <b>DRIVER CALL</b>
+          <span>IDLE</span>
+        </div>
+        <button className="orange-button call-button"><Icon name="phone" size={18}/>CALL</button>
+      </div>
+      <hr className="divider" />
+      <div className="comm-row">
+        <div>
+          <b>JOURNEY REQUEST</b>
+          <span>DRIVER APPROVAL REQUIRED</span>
+        </div>
+        <button className="outline-button rest-stop-button" onClick={onRestStopProposal}><Icon name="pause" size={18}/>REST STOP</button>
+      </div>
+    </div>
+    <div className="rear-tile settings-tile">
+      <h3>SYSTEM SETTINGS</h3>
+      <div className="settings-options">
+        <button className="setting-row"><Icon name="display" size={24}/><span>DISPLAY &amp; AUDIO</span></button>
+        <button className="setting-row"><Icon name="settings" size={24}/><span>CONFIGURATION</span></button>
+      </div>
+    </div>
   </section>;
 }
 
 function WindowDisplay({ connectivity, presence }: { connectivity: GatewayState['connectivity']; presence: PresenceSnapshot | null }) {
   const networkLabel = connectivity.mode === 'offline' ? 'OFFLINE · LOCAL' : connectivity.mode === 'degraded' ? 'DEGRADED · SIMULATED' : 'ONLINE · SIMULATED';
   return <section className="device window-device" aria-label="Interactive window preview">
-    <div className="window-scene"><div className="window-photo"><img src={windowReference} alt="Illustrative outside view; all overlaid values are simulated examples"/></div><div className="window-status" aria-label="Simulated ambient status"><span><b>19:42</b><small>TIME · SIMULATED</small></span><span><b>12°C · RAIN</b><small>WEATHER EXAMPLE</small></span><span><b><Icon name="route" size={12}/>14 KM</b><small>ROUTE EXAMPLE</small></span><span><b>82% · 412 KM</b><small>ENERGY · VEHICLE UNSPECIFIED</small></span><span className="window-network"><b>{networkLabel}</b><small>AURA · {presence?.state ?? 'STATE PENDING'}</small></span></div></div>
+    <div className="window-scene">
+      <div className="window-photo"><img src={windowReference} alt="Illustrative outside view; all overlaid values are simulated examples"/></div>
+      <div className="window-status" aria-label="Simulated ambient status">
+        <span className="window-time"><b>19:42</b><small>TIME<span className="window-label-detail"> · SIMULATED</span></small></span>
+        <span><Icon name="rain" size={22}/><b>12°C · RAIN</b><small>WEATHER<span className="window-label-detail"> EXAMPLE</span></small></span>
+        <span><Icon name="arrow-up" size={22}/><b>14 KM</b><small><span className="window-route-prefix">ALPINE ROAD · </span>ROUTE EXAMPLE</small></span>
+        <span className="window-energy"><i className="energy-battery" aria-hidden="true"><i /></i><b>82% · 412 KM</b><small>{networkLabel.split(" · ")[0]}<span className="window-label-detail"> · {networkLabel.split(" · ")[1]}</span></small></span>
+      </div>
+      <span className="window-presence">AURA · {presence?.state ?? 'STATE PENDING'}</span>
+    </div>
   </section>;
 }
 
@@ -397,7 +402,7 @@ function App() {
       {voice.outputTranscript && <span><b>{BRAND.assistantName}:</b> {voice.outputTranscript}</span>}
     </div>}
     <div className="vehicle-layout">
-      <div className="driver-zone"><ScreenHeading title="Driver display" details="Cluster" gatewayStatus={clusterConnection.status} presence={gateway.presence}/><Cluster speedKph={gateway.speedKph} warning={gateway.activeSafetyWarning} presentation={clusterPresentation} motionPaused={clusterMotionPaused}/><ScreenHeading title="Journey & control" details="Center" gatewayStatus={centerConnection.status} presence={gateway.presence}/><CenterDisplay proposals={gateway.proposals} journeyStops={gateway.journeyStops} connection={centerConnection} warning={gateway.activeSafetyWarning} presentation={centerPresentation} recommendation={recommendation} tasks={gateway.activeTasks} taskReceipt={taskReceipt} onTaskCommand={sendTaskCommand} onRecommendationRequest={requestJourneyRecommendation} onRecommendationSubmit={(proposal) => { submitJourneyRecommendation(proposal); }} onConsent={(proposalId, decision) => sendCommand('center-main', { type: 'action.consent', payload: { proposalId, decision } })}/></div>
+      <div className="driver-zone"><ScreenHeading title="Driver display" details="Cluster" gatewayStatus={clusterConnection.status} presence={gateway.presence}/><ClusterDisplay speedKph={gateway.speedKph} warning={gateway.activeSafetyWarning} density={clusterPresentation.informationDensity} motionPaused={clusterMotionPaused}/><ScreenHeading title="Journey & control" details="Center" gatewayStatus={centerConnection.status} presence={gateway.presence}/><CenterDisplay proposals={gateway.proposals} journeyStops={gateway.journeyStops} connection={centerConnection} warning={gateway.activeSafetyWarning} presentation={centerPresentation} recommendation={recommendation} tasks={gateway.activeTasks} taskReceipt={taskReceipt} onTaskCommand={sendTaskCommand} onRecommendationRequest={requestJourneyRecommendation} onRecommendationSubmit={(proposal) => { submitJourneyRecommendation(proposal); }} onConsent={(proposalId, decision) => sendCommand('center-main', { type: 'action.consent', payload: { proposalId, decision } })}/></div>
       <div className="passenger-zone"><ScreenHeading title="Passenger discovery" details="Front passenger" gatewayStatus={passengerConnection.status} presence={gateway.presence}/><PassengerDisplay discovery={discovery} searchPlaces={searchPlaces} previewRoute={previewRoute} proposal={passengerProposal} connection={passengerConnection} connectivity={gateway.connectivity} onProposal={(place, route, originLabel) => {
         const pathSummary = `${(route.distanceMeters / 1000).toFixed(1)} km · ${(route.durationSeconds / 60).toFixed(0)} min`;
         const payload = discovery.route;

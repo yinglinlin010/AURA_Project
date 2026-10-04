@@ -2296,6 +2296,16 @@
       },
       "additionalProperties": false
     },
+    "journeyRequestFact": {
+      "type": "object",
+      "required": ["status", "value", "source"],
+      "properties": {
+        "status": {"enum": ["confirmed", "unknown"]},
+        "value": {"type": ["string", "null"]},
+        "source": {"enum": ["user_request", "not_provided"]}
+      },
+      "additionalProperties": false
+    },
     "journeyEvidenceSummary": {
       "type": "object",
       "required": ["criterion", "source", "sourceLabel", "observedAt", "freshness"],
@@ -2364,16 +2374,43 @@
         "protocolVersion": {"$ref": "#/definitions/protocolVersion"},
         "requestId": {"$ref": "#/definitions/id"},
         "traceId": {"$ref": "#/definitions/id"},
-        "status": {"enum": ["proposal", "abstained"]},
+        "status": {"enum": ["proposal", "clarification_required", "abstained"]},
         "reasonCode": {"type": "string", "minLength": 1, "maxLength": 96},
         "centerProposal": {"$ref": "#/definitions/journeyRecommendationCenterProposal"},
-        "recommendation": {"$ref": "#/definitions/journeyRecommendationSummary"}
+        "recommendation": {"$ref": "#/definitions/journeyRecommendationSummary"},
+        "clarification": {
+          "type": "object",
+          "required": ["question", "facts", "evidence", "simulated"],
+          "properties": {
+            "question": {"type": "string", "minLength": 1, "maxLength": 256},
+            "facts": {
+              "type": "object",
+              "required": ["passengerIdentity", "age", "disability", "mobilityNeed", "dropoffPreference"],
+              "properties": {
+                "passengerIdentity": {"$ref": "#/definitions/journeyRequestFact"},
+                "age": {"$ref": "#/definitions/journeyRequestFact"},
+                "disability": {"$ref": "#/definitions/journeyRequestFact"},
+                "mobilityNeed": {"$ref": "#/definitions/journeyRequestFact"},
+                "dropoffPreference": {"$ref": "#/definitions/journeyRequestFact"}
+              },
+              "additionalProperties": false
+            },
+            "evidence": {"type": "array", "items": {"$ref": "#/definitions/journeyEvidenceSummary"}},
+            "simulated": {"type": "boolean"}
+          },
+          "additionalProperties": false
+        }
       },
       "oneOf": [
         {
           "required": ["centerProposal", "recommendation"],
           "properties": {"status": {"const": "proposal"}},
           "not": {"required": ["reasonCode"]}
+        },
+        {
+          "required": ["clarification"],
+          "properties": {"status": {"const": "clarification_required"}},
+          "not": {"anyOf": [{"required": ["centerProposal"]}, {"required": ["recommendation"]}, {"required": ["reasonCode"]}]}
         },
         {
           "required": ["reasonCode"],

@@ -113,6 +113,38 @@ test("independent registered HMI clients share events and receive current state 
     assert.equal(offlineResult.route, "local");
     assert.equal(offlineResult.availability, "offline_local");
     assert.equal(cloudCalls, 0);
+    const localVoiceProposal = router.handleProviderProposal({
+      requestId: "offline-local-voice-proposal",
+      traceId: "offline-local-voice-trace",
+      requestedByRole: "center",
+      route: "local",
+      candidate: {
+        kind: "CHANGE_CABIN_SETTING",
+        summary: "Increase cabin audio volume",
+        targetRole: "center",
+        priority: "normal",
+        requiresConsent: true,
+        payload: { setting: "volume", direction: "up" },
+      },
+    });
+    assert.equal(localVoiceProposal.route, "local");
+    assert.equal(localVoiceProposal.proposal?.status, "awaiting_consent");
+    const cloudVoiceProposal = router.handleProviderProposal({
+      requestId: "offline-cloud-voice-proposal",
+      traceId: "offline-cloud-voice-trace",
+      requestedByRole: "center",
+      route: "cloud",
+      candidate: {
+        kind: "CHANGE_CABIN_SETTING",
+        summary: "Increase cabin audio volume",
+        targetRole: "center",
+        priority: "normal",
+        requiresConsent: true,
+        payload: { setting: "volume", direction: "up" },
+      },
+    });
+    assert.equal(cloudVoiceProposal.availability, "unavailable");
+    assert.equal(cloudVoiceProposal.fallbackReason, "CONNECTIVITY_OFFLINE");
 
     const expiredHistorySnapshot = waitForMessage(clients[1]!.socket, (message) => message.kind === "snapshot");
     clients[1]!.socket.send(JSON.stringify({

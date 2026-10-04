@@ -64,6 +64,7 @@ test("Qwen3 request suppresses reasoning and receives narrow examples under the 
     assert.equal((body.format as { oneOf?: unknown[] }).oneOf?.length, 2);
     assert.doesNotMatch(String(body.prompt), /private-trace-id/);
     assert.match(String(body.prompt), /Brake now and steer left/);
+    assert.match(String(body.prompt), /把車內音量調大/);
     assert.match(String(body.system), /safety requests/);
   });
 });

@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { default as Ajv } from "ajv";
 import type { AuraSharedState, JourneyRecommendationMessage, SignalFreshness, SignalSource } from "../../../contracts/protocol/src/types.js";
 import type { JourneyEvidence, JourneyOption, JourneyRecommendationEvidenceSource, WholeJourneyEvidence } from "../src/journey-recommender.js";
-import { recommendWholeJourney, scoreJourneyOptions } from "../src/journey-recommender.js";
+import { assessJourneyRequest, recommendWholeJourney, scoreJourneyOptions } from "../src/journey-recommender.js";
 import { SimulatedJourneyRecommendationEvidenceSource } from "../src/journey-recommendation-fixture.js";
 
 const state = {} as AuraSharedState;
@@ -127,6 +127,98 @@ test("drop-off distance affects ranking only after the user confirms it matters"
     assert.ok(!declined.recommendation.rationale.some((line) => line.startsWith("Passenger drop-off:")));
     assert.equal(preferred.centerProposal.payload.placeId, "harbor-table");
   }
+});
+
+test("asks the useful drop-off clarification only when it can change ranking and preserves unknowns", async () => {
+  const now = 10_000;
+  const options = wholeJourney(now).options;
+  for (const candidate of options) {
+    candidate.poiQuality = evidence(4, now);
+    candidate.detourMinutes = evidence(10, now);
+    candidate.nearbyCharging = evidence([], now);
+  }
+  options[0]!.passengerDropoff = evidence({ access: "designated", distanceToEntranceMeters: 10 }, now);
+  options[1]!.passengerDropoff = evidence({ access: "street", distanceToEntranceMeters: 450 }, now);
+
+  const assessment = assessJourneyRequest("Find a place convenient for Mom to get out, with charging nearby", options, now);
+  assert.equal(assessment.clarification, "Would proximity to an entrance or a passenger drop-off space change your choice?");
+  assert.deepEqual(assessment.facts.passengerIdentity, { status: "confirmed", value: "Mom", source: "user_request" });
+  assert.equal(assessment.facts.age.status, "unknown");
+  assert.equal(assessment.facts.disability.status, "unknown");
+  assert.equal(assessment.facts.mobilityNeed.status, "unknown");
+  assert.equal(assessment.facts.dropoffPreference.status, "unknown");
+  assert.equal(assessment.facts.dropoffPreference.source, "not_provided");
+  assert.equal(scoreJourneyOptions(options, now).selected?.placeId, "garden-cafe");
+  assert.equal(scoreJourneyOptions(options, now, { prioritizePassengerDropoff: true }).selected?.placeId, "harbor-table");
+});
+
+test("does not ask when the preference is answered or cannot affect ranking", () => {
+  const now = 10_000;
+  const options = wholeJourney(now).options;
+  for (const candidate of options) {
+    candidate.poiQuality = evidence(4, now);
+    candidate.detourMinutes = evidence(10, now);
+    candidate.nearbyCharging = evidence([], now);
+    candidate.passengerDropoff = evidence({ access: "curbside", distanceToEntranceMeters: 50 }, now);
+  }
+  assert.equal(assessJourneyRequest("Find a place for Mom; entrance proximity matters", options, now).clarification, null);
+  assert.equal(assessJourneyRequest("Find a place for Mom; entrance proximity is not important", options, now).clarification, null);
+  const explicit = assessJourneyRequest("Find a place; drop-off space matters", options, now);
+  assert.deepEqual(explicit.facts.dropoffPreference, { status: "confirmed", value: "prioritize", source: "user_request" });
+  assert.deepEqual(explicit.facts.passengerIdentity, { status: "unknown", value: null, source: "not_provided" });
+  const namedPassenger = assessJourneyRequest("Find a convenient drop-off for Dad", options, now);
+  assert.deepEqual(namedPassenger.facts.passengerIdentity, { status: "confirmed", value: "Dad", source: "user_request" });
+  assert.equal(assessJourneyRequest("Find a place for Mom", [], now).clarification, null);
+});
+
+test("scenario fixture exposes simulated candidate evidence without live provider claims", async () => {
+  const now = 10_000;
+  const result = await new SimulatedJourneyRecommendationEvidenceSource().getEvidence({
+    requestText: "Find a convenient drop-off with charging nearby for Mom", state, now,
+  });
+  assert.ok(result);
+  assert.ok(result?.options.every((candidate) => candidate.passengerDropoff?.source === "simulated" &&
+    candidate.passengerDropoff.sourceLabel === "journey-recommendation-tradeoff fixture" &&
+    candidate.nearbyCharging?.source === "simulated" &&
+    candidate.nearbyCharging.sourceLabel === "journey-recommendation-tradeoff fixture"));
+  assert.ok(result?.options.every((candidate) => candidate.passengerDropoff?.observedAt === now && candidate.nearbyCharging?.observedAt === now));
+});
+
+test("recommendation caller returns Center clarification without a proposal or Journey mutation", async () => {
+  const now = 10_000;
+  const evidenceSet = wholeJourney(now);
+  for (const candidate of evidenceSet.options) {
+    candidate.poiQuality = evidence(4, now);
+    candidate.detourMinutes = evidence(10, now);
+    candidate.nearbyCharging = evidence([], now);
+  }
+  evidenceSet.options[0]!.passengerDropoff = evidence({ access: "designated", distanceToEntranceMeters: 10 }, now);
+  evidenceSet.options[1]!.passengerDropoff = evidence({ access: "street", distanceToEntranceMeters: 450 }, now);
+  const stateBefore = structuredClone(state);
+  const result = await recommendWholeJourney({
+    message: { ...message, requestText: "Find a place convenient for Mom to get out, with charging nearby" },
+    state,
+    now,
+    source: source(async () => evidenceSet),
+  });
+
+  assert.equal(result.status, "clarification_required");
+  if (result.status === "clarification_required") {
+    assert.match(result.clarification.question, /proximity/i);
+    assert.equal(result.clarification.facts.age && (result.clarification.facts.age as { status: string }).status, "unknown");
+    assert.equal(result.clarification.facts.disability && (result.clarification.facts.disability as { status: string }).status, "unknown");
+    assert.ok(result.clarification.evidence.every((item) => item.criterion === "passengerDropoff"));
+    assert.equal(result.clarification.simulated, true);
+    assert.ok(result.clarification.evidence.every((item) => item.source === "simulated"));
+    assert.equal("centerProposal" in result, false);
+  }
+  assert.deepEqual(state, stateBefore);
+
+  const schema = JSON.parse(readFileSync("contracts/protocol/schemas/protocol.schema.json", "utf8"));
+  const ajv = new Ajv.default({ strict: false });
+  ajv.addSchema(schema);
+  const validate = ajv.compile({ $ref: "https://aura.local/schemas/protocol.schema.json#/definitions/journeyRecommendationResultsMessage" });
+  assert.equal(validate(result), true, JSON.stringify(validate.errors));
 });
 
 test("missing evidence abstains", async () => {

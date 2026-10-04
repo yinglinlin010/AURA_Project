@@ -37,6 +37,16 @@ export function createIntelligenceStack(
   const requestedByRole = options.requestedByRole ?? "center";
   const brand = brandFromEnvironment(process.env);
   const localIntent = new Gemma2BOfflineSimulator();
+  const localModelName = process.env.AURA_LOCAL_MODEL?.trim();
+  const student = localModelName
+    ? new OllamaProposalModel({
+        model: localModelName,
+        ...(process.env.OLLAMA_HOST?.trim() ? { host: process.env.OLLAMA_HOST.trim() } : {}),
+        ...(process.env.AURA_LOCAL_MODEL_TIMEOUT_MS?.trim()
+          ? { timeoutMs: Number(process.env.AURA_LOCAL_MODEL_TIMEOUT_MS) }
+          : {}),
+      })
+    : undefined;
   const voiceMode = process.env.AURA_VOICE_MODE;
   const useMock = voiceMode === "mock" ||
     (voiceMode !== "live" && voiceMode !== "local" && !process.env.GEMINI_API_KEY);
@@ -46,7 +56,17 @@ export function createIntelligenceStack(
         ...(process.env.AURA_WHISPER_CLI === undefined ? {} : { whisperCli: process.env.AURA_WHISPER_CLI }),
         ...(process.env.AURA_WHISPER_LANGUAGE === undefined ? {} : { language: process.env.AURA_WHISPER_LANGUAGE }),
         ...(process.env.AURA_SAY_VOICE === undefined ? {} : { sayVoice: process.env.AURA_SAY_VOICE }),
-        candidateForTranscript: (text) => localIntent.proposeDeterministicCommand(text),
+        candidateForTranscript: async (text, traceId, signal) => {
+          if (student) {
+            try {
+              return await student.proposeStudentCandidate({ text, traceId, signal });
+            } catch {
+              if (signal.aborted) throw signal.reason;
+              return undefined;
+            }
+          }
+          return localIntent.proposeDeterministicCommand(text);
+        },
       })
     : useMock
       ? new MockGeminiVoiceStreamingAdapter()
@@ -68,19 +88,7 @@ export function createIntelligenceStack(
     runtime,
     cloud,
     local: localIntent,
-    ...(process.env.AURA_LOCAL_MODEL?.trim()
-      ? {
-          student: new OllamaProposalModel({
-            model: process.env.AURA_LOCAL_MODEL.trim(),
-            ...(process.env.OLLAMA_HOST?.trim()
-              ? { host: process.env.OLLAMA_HOST.trim() }
-              : {}),
-            ...(process.env.AURA_LOCAL_MODEL_TIMEOUT_MS?.trim()
-              ? { timeoutMs: Number(process.env.AURA_LOCAL_MODEL_TIMEOUT_MS) }
-              : {}),
-          }),
-        }
-      : {}),
+    ...(student === undefined ? {} : { student }),
     trace,
     stopVoice: (traceId) => voice.stop(traceId),
   });
@@ -89,11 +97,12 @@ export function createIntelligenceStack(
     adapter: gemini,
     output: audioOutput,
     trace,
-    onProposalCandidate: ({ candidate, traceId }) => router.handleProviderProposal({
+    onProposalCandidate: ({ candidate, traceId, route }) => router.handleProviderProposal({
       requestId: `live-voice:${randomUUID()}`,
       traceId,
       requestedByRole,
       candidate,
+      ...(route === undefined ? {} : { route }),
     }),
   });
 

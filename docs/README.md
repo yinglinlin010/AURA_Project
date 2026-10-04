@@ -6,6 +6,12 @@
 - [產品說明](product/PRODUCT.md)
 - [方向確認與執行計畫](implementation/AURA_AGENT_HANDOFF_2026-10-04.md)：原方向文件的接手狀態、Git 基準、實作缺口與下一階段建議；產品權威內容仍以 Master Spec §61.31 為準
 - [Competition V1 需求稽核](implementation/AURA_COMPETITION_V1_REQUIREMENTS_AUDIT.md)：程式、歷史檢查結果與未驗證項目
+- [Journey Recommendation / M4](implementation/PHASE7_JOURNEY_RECOMMENDATION.md)：全行程推薦規則、模擬整合與 live evidence 限制
+- [Benchmark 測量協定](implementation/AURA_BENCHMARK_MEASUREMENT_PROTOCOL.md)：指標定義、所需設備與 benchmark 證據門檻
+- [本機語音 adapter](implementation/LOCAL_VOICE_ADAPTER.md)：Whisper／macOS TTS 的限制與真實音訊驗收需求
+- [Phase 8 Mapbox adapters](implementation/PHASE8_MAPBOX_ADAPTERS.md)
+- [Phase 8 Open-Meteo adapter](implementation/PHASE8_OPEN_METEO_WEATHER.md)
+- [Phase 10 offline continuity](implementation/PHASE10_OFFLINE_CLOUD_CONTINUITY.md)
 - [HMI 設計交接資料與圖片](../AURA_UI_UX_Handoff/)
 
 ## 架構設計

@@ -77,6 +77,7 @@ export interface ProviderProposalInput {
   traceId: string;
   requestedByRole: DisplayRole;
   candidate: unknown;
+  route?: "local" | "cloud";
 }
 
 const actionKinds: ActionKind[] = [
@@ -341,22 +342,23 @@ export class IntelligenceRouter {
   /** Validates and submits a proposal tool call received during a streamed voice session. */
   handleProviderProposal(input: ProviderProposalInput): IntelligenceResult {
     const startedAt = this.now();
+    const route = input.route ?? "cloud";
     const request: IntentRequest = {
       requestId: input.requestId,
       traceId: input.traceId,
       text: "",
       requestedByRole: input.requestedByRole,
     };
-    if (this.runtime.getState().connectivity.mode === "offline") {
+    if (route === "cloud" && this.runtime.getState().connectivity.mode === "offline") {
       const result: IntelligenceResult = {
         requestId: request.requestId,
         traceId: request.traceId,
-        route: "cloud",
+        route,
         availability: "unavailable",
         replyText: "Cloud connectivity is offline; the streamed proposal was not submitted.",
         fallbackReason: "CONNECTIVITY_OFFLINE",
       };
-      this.recordTrace(request, startedAt, "fallback", "cloud", "CONNECTIVITY_OFFLINE");
+      this.recordTrace(request, startedAt, "fallback", route, "CONNECTIVITY_OFFLINE");
       return result;
     }
     let candidate: ActionProposalCandidate;
@@ -367,14 +369,14 @@ export class IntelligenceRouter {
       const result: IntelligenceResult = {
         requestId: request.requestId,
         traceId: request.traceId,
-        route: "cloud",
+        route,
         replyText: "The voice proposal could not be validated, so no action was submitted.",
         fallbackReason,
       };
-      this.recordTrace(request, startedAt, "fallback", "cloud", fallbackReason);
+      this.recordTrace(request, startedAt, "fallback", route, fallbackReason);
       return result;
     }
-    return this.commitProposal(request, candidate, "cloud", startedAt);
+    return this.commitProposal(request, candidate, route, startedAt, undefined, route === "local" ? "local-voice-proposal" : undefined);
   }
 
   private commitProposal(

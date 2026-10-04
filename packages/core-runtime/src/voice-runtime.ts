@@ -5,7 +5,7 @@ export type VoiceRuntimeState = "IDLE" | "LISTENING" | "TRANSCRIBING" | "THINKIN
 export type VoiceProviderEvent =
   | { type: "input_transcription"; text: string; isFinal: boolean }
   | { type: "output_transcription"; text: string }
-  | { type: "proposal_candidate"; candidate: unknown; traceId: string }
+  | { type: "proposal_candidate"; candidate: unknown; traceId: string; route?: "local" | "cloud" }
   | { type: "audio_chunk"; data: Buffer; mimeType: string }
   | { type: "turn_complete" }
   | { type: "interrupted" }
@@ -35,7 +35,7 @@ export interface VoiceRuntimeOptions {
   output: VoiceOutputPort;
   trace?: TraceSink;
   now?: () => number;
-  onProposalCandidate?: (input: { candidate: unknown; traceId: string }) => unknown;
+  onProposalCandidate?: (input: { candidate: unknown; traceId: string; route?: "local" | "cloud" }) => unknown;
 }
 
 export type VoiceRuntimeEvent =
@@ -168,7 +168,7 @@ export class VoiceRuntime {
         break;
       case "proposal_candidate":
         if (this.onProposalCandidate) {
-          void Promise.resolve(this.onProposalCandidate({ candidate: event.candidate, traceId: event.traceId }))
+          void Promise.resolve(this.onProposalCandidate({ candidate: event.candidate, traceId: event.traceId, ...(event.route === undefined ? {} : { route: event.route }) }))
             .catch((error: unknown) => {
               const reason = error instanceof Error ? error.message : "VOICE_PROPOSAL_ROUTING_FAILED";
               this.recordTurn("error", reason);
