@@ -1,4 +1,5 @@
 import type {
+  JourneyAiAnalysis,
   ActionProposalRequest,
   AuraSharedState,
   JourneyRecommendationMessage,
@@ -108,6 +109,17 @@ export interface JourneyRecommendationEvidenceSource {
     /** Optional deterministic clock forwarded by the caller for freshness checks. */
     now?: number;
   }): Promise<WholeJourneyEvidence | null>;
+}
+
+export interface JourneyAnalysisInput {
+  requestText: string;
+  selected: JourneyOption;
+  rationale: string[];
+  simulated: boolean;
+  connectivity: "online" | "degraded" | "offline";
+}
+export interface JourneyAnalysisProvider {
+  analyze(input: JourneyAnalysisInput): Promise<JourneyAiAnalysis>;
 }
 
 export interface JourneyRecommendation {
@@ -234,6 +246,7 @@ export async function recommendWholeJourney(input: {
   message: JourneyRecommendationMessage;
   state: Readonly<AuraSharedState>;
   source?: JourneyRecommendationEvidenceSource;
+  analysis?: JourneyAnalysisProvider;
   now?: number;
 }): Promise<JourneyRecommendationResultMessage> {
   const { message } = input;
@@ -323,7 +336,7 @@ export async function recommendWholeJourney(input: {
   }
   const simulatedEvidence = [evidence.origin, evidence.destination, evidence.currentRoute, ...supportingEvidence]
     .some((item) => item.source === "simulated");
-  const recommendationSummary = {
+  const recommendationSummary: import("../../../contracts/protocol/src/types.js").JourneyRecommendationSummary = {
     score: recommendation.score,
     simulated: recommendation.simulated || simulatedEvidence,
     evidenceCoverage: recommendation.evidenceCoverage,
@@ -336,6 +349,16 @@ export async function recommendWholeJourney(input: {
     ],
     alternatives: recommendation.alternatives.map(({ placeId, label, rationale, evidence }) => ({ placeId, label, rationale, evidence })),
   };
+
+  if (input.analysis) {
+    recommendationSummary.aiAnalysis = await input.analysis.analyze({
+      requestText: message.requestText,
+      selected: recommendation.selected,
+      rationale: recommendation.rationale,
+      simulated: recommendationSummary.simulated,
+      connectivity: input.state.connectivity.mode,
+    });
+  }
 
   return {
     kind: "journey.recommendation.result",

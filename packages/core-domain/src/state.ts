@@ -3,6 +3,7 @@ import type { AuraSharedState } from "../../../contracts/protocol/src/types.js";
 export function createInitialState(): AuraSharedState {
   return {
     revision: 0,
+    rearExperience: { mode: "normal", liveJourney: "unavailable", source: "scenario-fixture" },
     vehicle: {
       speedKph: 0,
       gear: "UNKNOWN",

@@ -93,3 +93,18 @@ test("assistance level is a distinct concept and is not accepted as cognitive lo
   assert.equal(result.load, "normal");
   assert.equal("assistanceLevel" in result, false);
 });
+
+test("Quiet Mode and recovered cloud hold affect only Rear and Window", () => {
+  for (const role of ["rear", "interactive_window", "cluster", "center", "front_passenger"] as const) {
+    const zone = role === "rear" || role === "interactive_window";
+    const quiet = resolvePresentation({ role, load: "normal", activeSafetyWarning: false, rearZoneMode: "quiet", cloudPresentation: "available_but_held" });
+    assert.equal(quiet.suppressNonCriticalNotifications, zone);
+    assert.equal(quiet.holdCloudInformation, zone);
+    assert.equal(quiet.informationDensity, zone ? "reduced" : "concise");
+    const resumed = resolvePresentation({ role, load: "normal", activeSafetyWarning: false, rearZoneMode: "normal", cloudPresentation: "presented" });
+    assert.equal(resumed.holdCloudInformation, false);
+    assert.equal(resumed.suppressNonCriticalNotifications, false);
+    const held = resolvePresentation({ role, activeSafetyWarning: false, rearZoneMode: "normal", cloudPresentation: "available_but_held" });
+    assert.equal(held.holdCloudInformation, zone);
+  }
+});

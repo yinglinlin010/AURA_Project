@@ -13,12 +13,17 @@
     "scenario": "node dist/adapters/simulator/src/cli.js",
     "scenario:reliability": "npm run build && python3 scripts/scenario_reliability.py",
     "demo:router": "node dist/scripts/demo-intelligence-router.js",
-    "test:event-bus": "tsc -p tsconfig.test.json && node --test dist-test/packages/core-runtime/test/event-bus.test.js"
+    "test:event-bus": "tsc -p tsconfig.test.json && node --test dist-test/packages/core-runtime/test/event-bus.test.js",
+    "start:cabin": "npm run build && node dist/apps/core-host/src/cabin-main.js",
+    "start:journey": "npm run build && node dist/apps/core-host/src/journey-demo.js",
+    "start:competition": "npm run build && node dist/apps/core-host/src/competition.js"
   },
   "dependencies": {
     "@google/genai": "^2.26.0",
     "ajv": "^8.17.1",
     "better-sqlite3": "^12.4.1",
+    "opencc-js": "^1.4.2",
+    "pinyin-pro": "^3.29.4",
     "ws": "^8.22.0",
     "yaml": "^2.8.1"
   },

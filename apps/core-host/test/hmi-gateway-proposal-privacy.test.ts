@@ -57,8 +57,16 @@ test("passenger targets and model-supplied grants do not authorize passenger vis
     for (const client of clients) {
       client.messages.length = 0;
       client.socket.send(JSON.stringify({ kind: "resync", protocolVersion: 1, sessionId: runtime.sessionId, traceId: `replay-${client.registration.role}`, afterSequence: beforeProposal }));
-      await waitFor(client, (message) => message.kind === "event" && message.event?.traceId === "proposal-barrier");
-      if (client.registration.role === "front_passenger" || client === center) {
+      const visible = client.registration.role === "front_passenger" || client === center;
+      const recovered = await waitFor(client, (message) => visible
+        ? message.kind === "event" && message.event?.traceId === "proposal-barrier"
+        : message.kind === "snapshot");
+      if (!visible) {
+        assert.equal(recovered.snapshot.sequence, runtime.eventBus.sequence);
+        assert.equal(recovered.snapshot.state.connectivity.mode, "degraded");
+        assert.equal(recovered.snapshot.state.activeProposals.length, 0);
+      }
+      if (visible) {
         assert.ok(client.messages.some((message) => message.kind === "event" && message.event?.type === "proposal.created" && message.event.payload.proposal.proposalId === proposalId));
       } else {
         assertNoProposal(client.messages, proposalId);
@@ -181,3 +189,8 @@ async function closeSocket(socket: WebSocket): Promise<void> {
   if (socket.readyState !== WebSocket.OPEN) { socket.terminate(); return; }
   await new Promise<void>((resolve) => { socket.once("close", resolve); socket.close(1000, "test complete"); });
 }
+
+test("invalid cabin command returns a correlated error instead of an unbounded pending request",async()=>{
+ const runtime=new CoreRuntime({registry});const gateway=new HmiGateway({runtime,registry,host:"127.0.0.1",port:0});await gateway.start();let client:Client|undefined;
+ try{client=await connect(gateway.address()!,registry.displays.find(d=>d.role==="center")!);client.socket.send(JSON.stringify({kind:"cabin.command",protocolVersion:1,requestId:"invalid-timing",command:{type:"trip.propose",personId:"driver",placeId:"lake",voteDurationSeconds:0}}));const reply=await waitFor(client,m=>m.kind==="cabin.result"&&m.requestId==="invalid-timing");assert.equal(reply.status,"error");assert.equal(reply.errorCode,"INVALID_MESSAGE");}finally{client?.socket.close();await gateway.close();}
+});

@@ -95,6 +95,7 @@ export interface ActionProposalRequest {
 }
 
 export interface ActionProposal extends ActionProposalRequest {
+  lastDecision?: PolicyDecision;
   requestedByRole: DisplayRole;
   createdAt: number;
   status: ProposalStatus;
@@ -195,7 +196,17 @@ export interface SafetyWarningState {
   activatedAt: number;
 }
 
+export interface RearExperienceState {
+  decidedAt?: number;
+  traceId?: string;
+  reasonCode?: string;
+  mode: "normal" | "quiet";
+  liveJourney: "unavailable" | "presented" | "available_but_held";
+  source: "scenario-fixture";
+}
+
 export interface AuraSharedState {
+  rearExperience: RearExperienceState;
   revision: number;
   vehicle: VehicleState;
   driver: DriverState;
@@ -220,6 +231,8 @@ export interface StateSnapshot {
 }
 
 export type AuraCommand =
+  | { type: "rear.mode.set"; payload: { mode: "normal" | "quiet" } }
+  | { type: "demo.reset"; payload: Record<string, never> }
   | {
       type: "connectivity.mode.report";
       payload: { mode: ConnectivityMode; evidence: string };
@@ -293,6 +306,8 @@ export interface EventBase {
 }
 
 export type AuraDomainEvent =
+  | (EventBase & { type: "rear.experience.changed"; payload: { experience: RearExperienceState; decision: "EXECUTE"; actor: "rear"; reasonCode: string } })
+  | (EventBase & { type: "demo.reset"; payload: { state: AuraSharedState } })
   | (EventBase & {
       type: "context.signal.received";
       payload: { signal: ContextSignal };
@@ -373,6 +388,10 @@ export type AuraDomainEvent =
   | (EventBase & {
       type: "display.connection.changed";
       payload: { displayId: string; connected: boolean; lastSeenAt: number };
+    })
+  | (EventBase & {
+      type: "journey.stops.replaced";
+      payload: { stops: JourneyStop[] };
     })
   | (EventBase & {
       type: "journey.stop.added";
@@ -531,7 +550,17 @@ export interface JourneyRecommendationOptionSummary {
   evidence: JourneyEvidenceSummary[];
 }
 
+export type JourneyAiAnalysis = {
+  provider: "gemini" | "ollama";
+  model: string;
+  fallbackReason?: string;
+} & (
+  | { status: "completed"; summary: string; observedAt: number; durationMs: number }
+  | { status: "unavailable"; errorCode: string }
+);
+
 export interface JourneyRecommendationSummary {
+  aiAnalysis?: JourneyAiAnalysis;
   score: number;
   simulated: boolean;
   evidenceCoverage: number;
@@ -583,7 +612,7 @@ export interface VoiceTextMessage {
   text: string;
 }
 
-export type ClientMessage = RegisterMessage | CommandMessage | TaskLifecycleMessage | ResyncMessage | PingMessage | PlacesSearchMessage | JourneyRoutePreviewMessage | JourneyRecommendationMessage | VoiceStartMessage | VoiceStopMessage | VoiceTextMessage;
+export type ClientMessage = import('./cabin.js').CabinCommandMessage | RegisterMessage | CommandMessage | TaskLifecycleMessage | ResyncMessage | PingMessage | PlacesSearchMessage | JourneyRoutePreviewMessage | JourneyRecommendationMessage | VoiceStartMessage | VoiceStopMessage | VoiceTextMessage;
 
 export interface WelcomeMessage {
   kind: "welcome";
@@ -657,6 +686,8 @@ export interface VoiceAudioMessage {
 }
 
 export type ServerMessage =
+  | import('./cabin.js').CabinStateMessage
+  | import('./cabin.js').CabinResultMessage
   | WelcomeMessage
   | AckMessage
   | SnapshotMessage

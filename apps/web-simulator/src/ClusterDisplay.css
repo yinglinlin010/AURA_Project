@@ -30,12 +30,12 @@
 .road-edge { fill: none; stroke: #c9cdd0; stroke-width: 10; }
 .road-center { fill: none; stroke: #858e92; stroke-width: 7; stroke-dasharray: 13 32; stroke-dashoffset: 0; animation: aura-road-travel var(--marker-duration) linear infinite; animation-play-state: var(--marker-play-state); opacity: .8; }
 @keyframes aura-road-travel { to { stroke-dashoffset: -45; } }
-.aura-cluster-car { position: absolute; right: 25%; bottom: 22%; left: 25%; aspect-ratio: 3 / 2; background-repeat: no-repeat; background-size: contain; background-position: center; }
+.aura-cluster-car { position: absolute; right: 21%; bottom: 22%; left: 21%; aspect-ratio: 3 / 2; background-repeat: no-repeat; background-size: contain; background-position: center; }
 .aura-cluster-vehicle { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; color: #c8d5df; text-align: center; transform: translateY(-1.6cqw); }
 .aura-cluster-vehicle h2 { margin: 0 0 1.5cqw; font-size: 1.65cqw; font-weight: 400; letter-spacing: .015em; white-space: nowrap; }
 .aura-cluster-vehicle h2 span { text-transform: none; }
 .aura-cluster-tires { position: relative; width: 87%; height: 37%; display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; align-items: center; }
-.aura-cluster-topcar { grid-column: 2; grid-row: 1 / 3; justify-self: center; width: 65%; height: 100%; background-repeat: no-repeat; background-size: 2073% 379%; background-position: 90% 46%; mix-blend-mode: lighten; }
+.aura-cluster-topcar { grid-column: 2; grid-row: 1 / 3; justify-self: center; width: 100%; height: 100%; background-repeat: no-repeat; background-size: auto 90%; background-position: center; }
 .aura-cluster-tire { display: flex; flex-direction: column; align-items: center; color: #d3dce4; font-size: 1.6cqw; line-height: 1.05; }
 .aura-cluster-tire b { margin-top: .25cqw; color: #f5f7f8; font-size: 2.2cqw; font-weight: 400; }
 .aura-cluster-tire.tire-FL { grid-column: 1; grid-row: 1; }.aura-cluster-tire.tire-FR { grid-column: 3; grid-row: 1; }.aura-cluster-tire.tire-RL { grid-column: 1; grid-row: 2; }.aura-cluster-tire.tire-RR { grid-column: 3; grid-row: 2; }
@@ -53,3 +53,5 @@
 .aura-cluster.load-critical .aura-cluster-speed,
 .aura-cluster.safety-active .aura-cluster-speed { grid-column: 2 / 5; }
 @media (prefers-reduced-motion: reduce) { .aura-cluster .road-center { animation: none; } }
+
+.aura-cluster-speed > .aura-cluster-navigation { position: absolute; bottom: 8%; left: 0; right: 0; font-size: 1.7cqw; color: #d3dce4; }

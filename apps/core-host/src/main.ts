@@ -1,3 +1,5 @@
+import { createCabinCoordinator } from './cabin-coordinator.js';
+import { createJourneyAnalysis } from './journey-ai.js';
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { assertDisplayRegistry } from "../../../contracts/protocol/src/registry.js";
@@ -13,7 +15,8 @@ import { ACTIVE_JOURNEY_ID, persistJourney, restoreJourney } from "./journey-per
 import { brandFromEnvironment } from "../../../packages/core-domain/src/brand.js";
 import { HttpConnectivityMonitor } from "../../../adapters/connectivity/http-connectivity-monitor.js";
 import { SqliteTaskStore } from "../../../adapters/persistence/sqlite-task-store.js";
-import { createTaskResumeRevalidator, type HostTaskRecoveryEvidenceProvider } from "./task-recovery-evidence.js";
+import type { HostTaskRecoveryEvidenceProvider } from "./task-recovery-evidence.js";
+import { configureTaskRecovery } from "./simulated-task-recovery.js";
 
 function loadRegistry(): DisplayRegistry {
   const configPath = process.env.AURA_DISPLAY_REGISTRY ??
@@ -26,9 +29,11 @@ function loadRegistry(): DisplayRegistry {
 export async function main(taskRecoveryEvidenceProvider?: HostTaskRecoveryEvidenceProvider): Promise<void> {
   const brand = brandFromEnvironment(process.env);
   const registry = loadRegistry();
+  const recovery = configureTaskRecovery(process.env, taskRecoveryEvidenceProvider);
+  if (recovery.diagnostic) process.stdout.write(`${recovery.diagnostic}\n`);
   const journeys = new SqliteJourneyStore();
-  const tasks = new SqliteTaskStore();
-  const revalidateTask = createTaskResumeRevalidator(taskRecoveryEvidenceProvider);
+  const tasks = new SqliteTaskStore(recovery.databasePath === undefined ? {} : { databasePath: recovery.databasePath });
+  const revalidateTask = recovery.revalidateTask;
   const runtime = new CoreRuntime({
     registry,
     initialJourney: restoreJourney(journeys.get(ACTIVE_JOURNEY_ID)),
@@ -49,12 +54,15 @@ export async function main(taskRecoveryEvidenceProvider?: HostTaskRecoveryEviden
     if (socket.readyState === 1) socket.send(JSON.stringify(message));
   });
   const intelligence = createIntelligenceStack(runtime, audioOutput);
+  const journeyAnalysis = createJourneyAnalysis();
   const gateway = new HmiGateway({
     runtime,
     registry,
+    cabin: createCabinCoordinator(runtime, registry),
     host: process.env.AURA_HOST ?? "127.0.0.1",
     port: Number(process.env.AURA_PORT ?? 8080),
     path: process.env.AURA_WS_PATH ?? "/ws",
+    ...(journeyAnalysis ? { journeyAnalysis } : {}),
     voice: intelligence.voice,
     voiceOutput: audioOutput,
     ...(journeyRecommendations === undefined ? {} : { journeyRecommendations }),

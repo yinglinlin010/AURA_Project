@@ -1,0 +1,441 @@
+/* Tactile Slate Design System for Dong Hwa Demo (Scoped) */
+.dong-hwa-demo {
+    --color-matte-charcoal: #1e1e1e;
+    --color-slate: #2c3033;
+    --color-slate-light: #3e4449;
+    --color-warm-sand: #e6dfd5;
+    --color-warm-sand-dim: #c5bba8;
+    --color-orange: #d97736;
+    --color-red-critical: #d34848;
+
+    --bg-overlay: rgba(30, 30, 30, 0.85);
+    --bg-dimmed: rgba(10, 10, 10, 0.95);
+
+    --font-primary: system-ui, -apple-system, sans-serif;
+
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    font-family: var(--font-primary);
+    color: var(--color-warm-sand);
+    background-color: #000;
+}
+
+/* Simulation Area */
+.dong-hwa-demo .simulation-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.dong-hwa-demo .ambient-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    z-index: 1;
+    transition: filter 0.3s ease;
+}
+
+.dong-hwa-demo .ambient-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, rgba(30,30,30,0.4), rgba(30,30,30,0.8));
+}
+
+/* 5-Screen Layout */
+.dong-hwa-demo .screens-wrapper {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: stretch;
+    gap: 20px;
+    height: 85vh;
+    margin-top: 5vh;
+    padding: 0 40px;
+}
+
+.dong-hwa-demo .screen-panel {
+    background-color: var(--bg-overlay);
+    border: 2px solid var(--color-slate-light);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+}
+
+.dong-hwa-demo .panel-header {
+    background-color: var(--color-slate);
+    padding: 12px 20px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-warm-sand-dim);
+    border-bottom: 1px solid var(--color-slate-light);
+}
+
+.dong-hwa-demo .panel-content {
+    flex: 1;
+    padding: 20px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Specific Panels */
+.dong-hwa-demo .window-panel {
+    flex: 1 1 20%;
+    max-width: 300px;
+    height: 45%;
+}
+
+.dong-hwa-demo .cluster-panel {
+    flex: 1 1 30%;
+    max-width: 500px;
+    height: 45%;
+}
+
+.dong-hwa-demo .center-panel {
+    flex: 1 1 40%;
+    max-width: 600px;
+    height: 45%;
+}
+
+.dong-hwa-demo .rear-panel {
+    flex: 1 1 40%;
+    max-width: 500px;
+    height: 45%;
+}
+
+/* Fly Screen Animations */
+.dong-hwa-demo .fly-out {
+    animation: flyOut 1.5s forwards cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dong-hwa-demo .fly-in {
+    animation: flyIn 1s forwards cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes flyOut {
+    0% { transform: translateX(0) scale(1); opacity: 1; }
+    80% { transform: translateX(120%) scale(0.9); opacity: 0; }
+    100% { transform: translateX(120%) scale(0.9); opacity: 0; }
+}
+
+@keyframes flyIn {
+    0% { transform: translateX(-50px) scale(0.95); opacity: 0; }
+    100% { transform: translateX(0) scale(1); opacity: 1; }
+}
+
+/* UI Components */
+.dong-hwa-demo .proposal-card {
+    background-color: var(--color-slate);
+    padding: 24px;
+    border-radius: 8px;
+    border-left: 4px solid var(--color-orange);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.dong-hwa-demo .proposal-card h4 {
+    margin: 0 0 8px 0;
+    color: var(--color-orange);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+}
+
+.dong-hwa-demo .proposal-card h3 {
+    margin: 0 0 16px 0;
+    font-size: 1.8rem;
+}
+
+.dong-hwa-demo .hint-text {
+    color: var(--color-warm-sand-dim);
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+}
+
+.dong-hwa-demo .poi-image-small {
+    width: 100%;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.dong-hwa-demo .poi-image-medium {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.dong-hwa-demo .action-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+.dong-hwa-demo button {
+    font-family: var(--font-primary);
+    cursor: pointer;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 24px;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: background-color 0.2s;
+}
+
+.dong-hwa-demo .btn-confirm {
+    background-color: var(--color-orange);
+    color: #fff;
+    flex: 2;
+}
+
+.dong-hwa-demo .btn-confirm:hover {
+    background-color: #e88645;
+}
+
+.dong-hwa-demo .btn-cancel {
+    background-color: var(--color-slate-light);
+    color: var(--color-warm-sand);
+    flex: 1;
+}
+
+.dong-hwa-demo .btn-cancel:hover {
+    background-color: #4e555a;
+}
+
+/* Itinerary Updated */
+.dong-hwa-demo .itinerary-updated {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.dong-hwa-demo .success-check {
+    width: 64px;
+    height: 64px;
+    border-radius: 32px;
+    background-color: var(--color-orange);
+    color: white;
+    font-size: 32px;
+    line-height: 64px;
+    margin-bottom: 20px;
+}
+
+.dong-hwa-demo .itinerary-updated h3 {
+    margin: 0 0 8px 0;
+}
+
+.dong-hwa-demo .itinerary-updated p {
+    margin: 0;
+    color: var(--color-warm-sand-dim);
+}
+
+/* Cluster */
+.dong-hwa-demo .cluster-content {
+    align-items: center;
+    justify-content: center;
+}
+
+.dong-hwa-demo .speedometer {
+    font-size: 5rem;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+}
+
+.dong-hwa-demo .speedometer .unit {
+    font-size: 1.5rem;
+    color: var(--color-warm-sand-dim);
+}
+
+/* Offline Notice */
+.dong-hwa-demo .offline-notice {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.dong-hwa-demo .offline-icon {
+    font-size: 4rem;
+    margin-bottom: 16px;
+    opacity: 0.7;
+}
+
+.dong-hwa-demo .offline-slider-container {
+    margin: 16px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.dong-hwa-demo .cached-info-card {
+    margin-top: 16px;
+    background-color: var(--color-slate);
+    padding: 20px;
+    border-radius: 8px;
+    border-left: 4px solid var(--color-slate-light);
+    text-align: left;
+    width: 80%;
+}
+
+.dong-hwa-demo .cached-info-card h4 {
+    margin: 0 0 12px 0;
+    color: var(--color-warm-sand-dim);
+}
+
+.dong-hwa-demo .cached-info-card p {
+    margin: 4px 0;
+}
+
+/* Blind Spot Warning */
+.dong-hwa-demo .warning-active {
+    border-color: var(--color-red-critical) !important;
+    box-shadow: 0 0 30px rgba(211, 72, 72, 0.4) !important;
+}
+
+.dong-hwa-demo .blind-spot-warning,
+.dong-hwa-demo .cluster-warning {
+    background-color: rgba(211, 72, 72, 0.15);
+    border: 2px solid var(--color-red-critical);
+    color: #fff;
+    padding: 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: pulse 1.5s infinite;
+    margin-top: 20px;
+}
+
+.dong-hwa-demo .cluster-warning {
+    font-size: 1.2rem;
+}
+
+.dong-hwa-demo .warning-icon {
+    font-size: 1.5rem;
+}
+
+.dong-hwa-demo .simulated-badge {
+    display: inline-block;
+    background-color: var(--color-red-critical);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    margin-left: 8px;
+    letter-spacing: 0.05em;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Attribution */
+.dong-hwa-demo .attribution {
+    position: absolute;
+    bottom: 20px;
+    right: 30px;
+    z-index: 10;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.6);
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 12px 16px;
+    border-radius: 6px;
+    line-height: 1.5;
+}
+
+.dong-hwa-demo .attribution p {
+    margin: 4px 0;
+}
+
+/* Director Controls */
+.dong-hwa-demo .director-controls {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(44, 48, 51, 0.95);
+    border: 1px solid var(--color-slate-light);
+    border-radius: 12px;
+    padding: 20px;
+    z-index: 100;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+    backdrop-filter: blur(20px);
+}
+
+.dong-hwa-demo .director-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 16px;
+}
+
+.dong-hwa-demo .director-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--color-orange);
+}
+
+.dong-hwa-demo .control-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+.dong-hwa-demo .control-buttons button {
+    background-color: var(--color-matte-charcoal);
+    color: var(--color-warm-sand);
+    border: 1px solid var(--color-slate-light);
+    font-size: 0.9rem;
+    padding: 10px 16px;
+}
+
+.dong-hwa-demo .control-buttons button:hover {
+    background-color: var(--color-slate);
+}
+
+.dong-hwa-demo .control-buttons button.active {
+    background-color: var(--color-orange);
+    border-color: var(--color-orange);
+    color: #fff;
+}
+
+.dong-hwa-demo .control-buttons .btn-reset {
+    margin-left: 20px;
+    background-color: transparent;
+    border-color: transparent;
+    text-decoration: underline;
+}
+
+.dong-hwa-demo .control-buttons .btn-reset:hover {
+    background-color: rgba(255,255,255,0.1);
+}

@@ -84,7 +84,7 @@ export function evaluateActionProposal(input: ActionGateInput): PolicyDecision {
 
   return {
     ...base,
-    outcome: "ROUTE",
+    outcome: proposal.requiresConsent && proposal.payload.competitionScenario === "premium-journey" ? "ASK" : "ROUTE",
     reasonCode: "DRIVER_LOAD_BELOW_DEFERRAL_THRESHOLD",
   };
 }

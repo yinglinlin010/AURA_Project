@@ -2,6 +2,10 @@
 
 AURA 的產品規格、架構設計與實作紀錄集中在 [`docs/`](docs/README.md)。
 
+## 可操作的座艙系統
+
+預設 Web 介面已接入 OpenStreetMap、實際路線、跨座位照片與字幕，以及「過半＋駕駛同意」投票。啟動、語音與本機 AI 設定見 [座艙操作指南](docs/implementation/FUNCTIONAL_CABIN.md)。
+
 ## 專案目錄
 
 - `apps/`：可執行應用，包括 core host 與 web simulator
@@ -51,3 +55,11 @@ npm run start
 ```
 
 這會把該模型當成本機候選器，不代表模型已微調或通過評估。教師模型產生的資料須保留來源並經逐筆人工審查，才能納入訓練集；訓練使用可微調的 Hugging Face base checkpoint，Ollama GGUF 權重不能直接當作 SFTTrainer 的訓練底模。設定、資料審查和學生微調進度見 [`AURA_TEACHER_STUDENT_MODEL_PLAN.md`](docs/architecture/AURA_TEACHER_STUDENT_MODEL_PLAN.md)。
+
+
+## PACT 多乘員協調 Demo
+
+依據 [PACT v2 規格](docs/product/PACT_AI_Negotiation_Cabin_v2.md) 新增獨立的模擬 MVP。
+Web 入口為 `http://127.0.0.1:5173/?demo=pact`；Android `PactActivity` 內嵌介面與本機引擎，無需開發伺服器。
+包括三乘員顯示、五種決策、空調衝突協調、注意力負荷、駕駛確認、離線核心與可自動播放的 Demo。
+啟動、建置、驗證與功能限制見 [PACT 實作紀錄](docs/implementation/PACT_MVP.md)。

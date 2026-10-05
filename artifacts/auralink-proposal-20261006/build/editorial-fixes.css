@@ -1,0 +1,24 @@
+.architecture-page .arch-node h3{margin-bottom:16px}
+.architecture-page .node-section{margin-top:16px;line-height:1.45}
+.architecture-page .node-section:first-of-type{margin-top:0}
+.architecture-page .support{margin-top:22px;padding-top:16px}
+.hybrid-page .mode-part{margin-top:18px}
+.hybrid-page .mode>h3{margin-bottom:14px}
+.hybrid-page .shared-limit{margin-top:24px;padding-top:16px}
+.hybrid-page .support{margin-top:20px;padding-top:14px}
+.film .support.two{grid-template-columns:1.65fr 1fr}
+.film .support{margin-top:20px;padding-top:16px}
+.disclosure table{font-size:18px;line-height:1.4}
+.disclosure th,.disclosure td{padding:8px 14px}
+.disclosure .cell-detail{font-size:17px;line-height:1.4;margin-top:6px}
+.disclosure .support{font-size:17px;margin-top:22px;padding-top:18px}
+.crop.subtitle img{object-position:50% 77%}
+.crop.navigation img{object-position:50% 90%}
+.shared{grid-template-columns:auto auto;width:fit-content;max-width:100%;margin:36px auto 0;align-items:center;text-align:center}
+@media(max-width:640px){
+ .shared{grid-template-columns:1fr;width:100%;gap:10px}
+ .film .support.two{grid-template-columns:1fr}
+ .architecture-page .support,.hybrid-page .support,.film .support,.disclosure .support{margin-top:28px;padding-top:22px;font-size:17px;line-height:1.65}
+ .disclosure td{border:0;padding:6px 0;font-size:18px;line-height:1.6}
+ .disclosure .cell-detail{font-size:17px;line-height:1.55}
+}

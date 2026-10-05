@@ -36,6 +36,7 @@ const DEFAULT_MAX_UTTERANCE_BYTES = 960_000; // 30 seconds, 16 kHz, mono, signed
 const DEFAULT_SILENCE_MS = 700;
 const DEFAULT_SILENCE_RMS = 320;
 const DEFAULT_PROCESS_TIMEOUT_MS = 45_000;
+const PROCESS_TERMINATION_GRACE_MS = 250;
 const MAX_STDOUT_BYTES = 2_000_000;
 const MAX_OUTPUT_WAV_BYTES = 12_000_000;
 
@@ -181,7 +182,8 @@ export class LocalWhisperVoiceAdapter implements VoiceProvider {
       const transcript = asr.stdout.toString("utf8").trim().replace(/^\[[^\]]+\]\s*/gm, "").trim();
       if (!transcript) throw new Error("LOCAL_VOICE_EMPTY_TRANSCRIPT");
       this.emit({ type: "input_transcription", text: transcript, isFinal: true });
-      const candidate = await this.candidateForTranscript?.(transcript, this.traceId, controller.signal);
+      const candidate = await this.waitForCandidate(transcript, controller.signal);
+      if (controller.signal.aborted || !this.connected) return;
       if (candidate !== undefined) this.emit({ type: "proposal_candidate", candidate, traceId: this.traceId, route: "local" });
       const response = `I heard: ${transcript}`;
       this.emit({ type: "output_transcription", text: response });
@@ -208,13 +210,49 @@ export class LocalWhisperVoiceAdapter implements VoiceProvider {
       }
       this.emit({ type: "turn_complete" });
     } catch (error) {
-      if (!controller.signal.aborted && this.connected) this.fail(error instanceof Error ? error.message : "LOCAL_VOICE_FAILED");
+      if (!controller.signal.aborted && this.connected) {
+        this.fail(error instanceof Error ? error.message : "LOCAL_VOICE_FAILED");
+        if (error instanceof Error && error.message === "LOCAL_VOICE_CANDIDATE_TIMEOUT") controller.abort(error);
+      }
     } finally {
       if (this.taskController === controller) this.taskController = undefined;
       this.busy = false;
       if (directory) await rm(directory, { recursive: true, force: true }).catch(() => undefined);
       if (this.workDirectory === directory) this.workDirectory = undefined;
     }
+  }
+
+  private waitForCandidate(transcript: string, signal: AbortSignal): Promise<unknown> {
+    const callback = this.candidateForTranscript;
+    if (!callback) return Promise.resolve(undefined);
+    return new Promise((resolve, reject) => {
+      if (signal.aborted) return reject(new Error("LOCAL_VOICE_CANCELLED"));
+      let settled = false;
+      const finish = (error: unknown, candidate?: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        signal.removeEventListener("abort", abort);
+        if (error !== undefined) reject(error);
+        else resolve(candidate);
+      };
+      const abort = () => finish(new Error("LOCAL_VOICE_CANCELLED"));
+      // Reuse the configured per-stage process budget; this is not a latency SLA.
+      const timeout = setTimeout(() => finish(new Error("LOCAL_VOICE_CANDIDATE_TIMEOUT")), this.processTimeoutMs);
+      signal.addEventListener("abort", abort, { once: true });
+      try {
+        // Both handlers stay attached to consume late rejection after cancellation.
+        Promise.resolve(callback(transcript, this.traceId, signal)).then(
+          (candidate) => finish(undefined, candidate),
+          (error: unknown) => {
+            // A rejection with undefined must still be a failure.
+            finish(error ?? new Error("LOCAL_VOICE_CANDIDATE_FAILED"));
+          },
+        );
+      } catch (error) {
+        finish(error ?? new Error("LOCAL_VOICE_CANDIDATE_FAILED"));
+      }
+    });
   }
 
   private fail(reasonCode: string): void {
@@ -252,18 +290,24 @@ class SpawnVoiceProcessRunner implements VoiceProcessRunner {
       let outputBytes = 0;
       let settled = false;
       let terminationError: Error | undefined;
+      let killTimer: ReturnType<typeof setTimeout> | undefined;
       const finish = (error?: Error, result?: VoiceProcessResult) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
+        clearTimeout(killTimer);
         options.signal.removeEventListener("abort", abort);
-        if (error) reject(error);
+        if (terminationError ?? error) reject(terminationError ?? error);
         else resolve(result!);
       };
       const terminate = (error: Error) => {
-        if (terminationError) return;
+        if (settled || terminationError) return;
         terminationError = error;
         child.kill("SIGTERM");
+        // Keep waiting for close before deleting files the process may still use.
+        killTimer = setTimeout(() => {
+          if (!settled && child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+        }, PROCESS_TERMINATION_GRACE_MS);
       };
       const abort = () => terminate(new Error("LOCAL_VOICE_CANCELLED"));
       const timeout = setTimeout(() => terminate(new Error("LOCAL_VOICE_PROCESS_TIMEOUT")), options.timeoutMs);
@@ -331,4 +375,4 @@ function extractWavPcm(wav: Buffer): Buffer {
   throw new Error("LOCAL_VOICE_OUTPUT_PCM_MISSING");
 }
 
-export const localVoiceInternals = { makeWav, extractWavPcm };
+export const localVoiceInternals = { makeWav, extractWavPcm, SpawnVoiceProcessRunner };

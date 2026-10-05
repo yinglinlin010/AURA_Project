@@ -1,0 +1,81 @@
+id: competition-premium-journey
+name: Premium Executive Journey — Quiet Intelligence
+description: Fixture-only vehicle, Donghu ETA and cloud context; real CoreRuntime authority, consent, attention and rear presentation state.
+timeline:
+  - id: journey-point
+    atMs: 0
+    kind: signal
+    signal:
+      type: journey.point
+      freshness: fresh
+      value: { scenario: premium-journey, pointId: fixture-donghu, label: Donghu, category: Scenic Experience, description: Scenic lakeside stop, etaImpactMinutes: 12 }
+  - id: cloud-connected
+    atMs: 0
+    kind: signal
+    signal: { type: connectivity.mode, value: { mode: online, evidence: scenario-fixture:live-journey } }
+  - id: normal-drive
+    atMs: 100
+    kind: signal
+    signal: { type: driver.cognitive_load, value: { level: normal, confidence: 0.95 } }
+  - id: driver-busy
+    atMs: 9000
+    kind: signal
+    signal: { type: driver.cognitive_load, value: { level: high, confidence: 0.95 } }
+  - id: vip-add-journey
+    atMs: 10000
+    kind: command
+    displayId: rear-tablet
+    command:
+      type: action.propose
+      payload:
+        proposal:
+          proposalId: premium-donghu
+          kind: ADD_TRIP_STOP
+          summary: Donghu · +12 min — SIMULATED JOURNEY CONTEXT
+          targetRole: center
+          priority: secondary
+          requiresConsent: true
+          payload: { placeId: fixture-donghu, label: Donghu, competitionScenario: premium-journey, source: simulated, etaImpactMinutes: 12 }
+  - id: load-normal
+    atMs: 21500
+    kind: signal
+    signal: { type: driver.cognitive_load, value: { level: normal, confidence: 0.95 } }
+  - id: driver-accept
+    atMs: 27500
+    kind: command
+    displayId: center-main
+    command: { type: action.consent, payload: { proposalId: premium-donghu, decision: approve } }
+  - id: cloud-offline
+    atMs: 39000
+    kind: signal
+    signal: { type: connectivity.mode, value: { mode: offline, evidence: scenario-fixture:cloud-outage } }
+  - id: quiet-mode
+    atMs: 46000
+    kind: command
+    displayId: rear-tablet
+    command: { type: rear.mode.set, payload: { mode: quiet } }
+  - id: cloud-restored
+    atMs: 57000
+    kind: signal
+    signal: { type: connectivity.mode, value: { mode: online, evidence: scenario-fixture:cloud-restored } }
+  - id: resume
+    atMs: 62000
+    kind: command
+    displayId: rear-tablet
+    command: { type: rear.mode.set, payload: { mode: normal } }
+expected:
+  decisions:
+    - { stepId: vip-add-journey, proposalId: premium-donghu, outcome: DEFER, reasonCode: DRIVER_COGNITIVE_LOAD_HIGH }
+    - { stepId: load-normal, proposalId: premium-donghu, outcome: ASK }
+    - { stepId: driver-accept, proposalId: premium-donghu, outcome: EXECUTE }
+  commands:
+    - { stepId: quiet-mode, status: RECEIVED, reasonCode: LOCAL_REAR_QUIET_MODE }
+    - { stepId: resume, status: RECEIVED, reasonCode: REAR_RESUME_REQUESTED }
+  finalState:
+    fields:
+      - { path: /journey/stops/0/placeId, equals: fixture-donghu }
+      - { path: /rearExperience/mode, equals: normal }
+      - { path: /rearExperience/liveJourney, equals: presented }
+  metrics:
+    - { name: journeyStopCount, equals: 1 }
+    - { name: completedSteps, equals: 11 }

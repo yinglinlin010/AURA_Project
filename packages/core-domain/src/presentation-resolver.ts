@@ -8,6 +8,8 @@ export interface PresentationResolverInput {
   /** Confidence is metadata about the load estimate, never a load state. */
   loadConfidence?: number;
   activeSafetyWarning: boolean;
+  rearZoneMode?: "normal" | "quiet";
+  cloudPresentation?: "unavailable" | "presented" | "available_but_held";
 }
 
 export interface PresentationResolution {
@@ -20,6 +22,8 @@ export interface PresentationResolution {
   suppressNonSafetyContent: boolean;
   safetyPriority: boolean;
   centerHighLoadMarkerEligible: boolean;
+  suppressNonCriticalNotifications: boolean;
+  holdCloudInformation: boolean;
 }
 
 const DRIVER_FACING_ROLES = new Set<DisplayRole>(["cluster", "center"]);
@@ -27,6 +31,8 @@ const DRIVER_FACING_ROLES = new Set<DisplayRole>(["cluster", "center"]);
 /** Resolves frozen load and safety presentation rules without mutating state. */
 export function resolvePresentation(input: PresentationResolverInput): PresentationResolution {
   const driverFacing = DRIVER_FACING_ROLES.has(input.role);
+  const rearZone = input.role === "rear" || input.role === "interactive_window";
+  const quietZone = rearZone && input.rearZoneMode === "quiet";
   const highLoad = input.load === "high" || input.load === "critical";
   const criticalLoad = input.load === "critical";
   const safetyPriority = input.activeSafetyWarning || criticalLoad;
@@ -50,6 +56,7 @@ export function resolvePresentation(input: PresentationResolverInput): Presentat
       informationDensity = "concise";
   }
 
+  if (quietZone) informationDensity = "reduced";
   if (suppressNonSafetyContent) informationDensity = "safety_only";
 
   return {
@@ -58,7 +65,9 @@ export function resolvePresentation(input: PresentationResolverInput): Presentat
     loadConfidence: input.loadConfidence,
     informationDensity,
     deferNonCritical: highLoad,
-    suppressAmbientActivity: highLoad || input.activeSafetyWarning,
+    suppressAmbientActivity: highLoad || input.activeSafetyWarning || quietZone,
+    suppressNonCriticalNotifications: quietZone,
+    holdCloudInformation: rearZone && (quietZone || input.cloudPresentation === "available_but_held"),
     suppressNonSafetyContent,
     safetyPriority,
     centerHighLoadMarkerEligible:

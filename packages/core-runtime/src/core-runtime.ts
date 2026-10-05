@@ -44,6 +44,8 @@ import { EventBus } from "./event-bus.js";
 import { TaskCancellationRegistry } from "./task-cancellations.js";
 
 export interface CoreRuntimeOptions {
+  /** Dedicated, non-persistent competition host only. */
+  allowDemoReset?: boolean;
   sessionId?: string;
   registry?: DisplayRegistry;
   now?: () => number;
@@ -82,6 +84,7 @@ export class CoreRuntime {
   readonly taskCancellations = new TaskCancellationRegistry();
 
   private state: AuraSharedState;
+  private readonly allowDemoReset: boolean;
   private readonly now: () => number;
   private readonly registry: DisplayRegistry | undefined;
   private readonly persistJourney: ((journey: JourneyState) => void) | undefined;
@@ -97,6 +100,7 @@ export class CoreRuntime {
     this.sessionId = options.sessionId ?? randomUUID();
     this.now = options.now ?? Date.now;
     this.registry = options.registry;
+    this.allowDemoReset = options.allowDemoReset === true && !options.persistJourney && !options.persistTasks;
     this.persistJourney = options.persistJourney;
     this.persistTasks = options.persistTasks;
     this.revalidateTask = options.revalidateTask;
@@ -633,7 +637,35 @@ export class CoreRuntime {
     senderRole: DisplayRole,
   ): { status: CommandReceipt["status"]; reasonCode?: string } {
     const command = envelope.command;
+    if (senderRole === "cluster") {
+      // Preserve the existing shared-Journey denial reason without granting any consent authority.
+      const consent = command.type === "action.consent"
+        ? evaluateConsent(this.state, command.payload.proposalId, senderRole, command.payload.decision) : undefined;
+      return { status: "REJECTED", reasonCode: consent && !consent.accepted && consent.reasonCode === "JOURNEY_CONSENT_REQUIRES_CENTER"
+        ? consent.reasonCode : "CLUSTER_READ_ONLY" };
+    }
+    if (senderRole === "interactive_window" && (
+      command.type !== "action.propose" ||
+      command.payload.proposal.kind !== "ADD_TRIP_STOP" ||
+      command.payload.proposal.targetRole !== "center" ||
+      !command.payload.proposal.requiresConsent
+    )) return { status: "REJECTED", reasonCode: "WINDOW_COMMAND_NOT_ALLOWED" };
     switch (command.type) {
+      case "demo.reset": {
+        if (!this.allowDemoReset || senderRole !== "center") return { status: "REJECTED", reasonCode: "DEMO_RESET_DISABLED" };
+        this.emit({ type: "demo.reset", sessionId: this.sessionId, traceId: envelope.traceId, commandId: envelope.commandId, occurredAt: this.now(), payload: { state: createInitialState() } });
+        return { status: "RECEIVED", reasonCode: "DEMO_RESET" };
+      }
+      case "rear.mode.set": {
+        if (senderRole !== "rear") return { status: "REJECTED", reasonCode: "REAR_ZONE_AUTHORITY_REQUIRED" };
+        if (!["normal", "quiet"].includes(command.payload.mode)) return { status: "REJECTED", reasonCode: "INVALID_REAR_MODE" };
+        const mode = command.payload.mode;
+        this.emit({ type: "rear.experience.changed", sessionId: this.sessionId, traceId: envelope.traceId, commandId: envelope.commandId, occurredAt: this.now(), payload: {
+          experience: { mode, decidedAt: this.now(), traceId: envelope.traceId, reasonCode: mode === "quiet" ? "LOCAL_REAR_QUIET_MODE" : "REAR_RESUME_REQUESTED", source: "scenario-fixture", liveJourney: this.state.connectivity.mode !== "online" ? "unavailable" : mode === "quiet" ? "available_but_held" : "presented" },
+          decision: "EXECUTE", actor: "rear", reasonCode: mode === "quiet" ? "LOCAL_REAR_QUIET_MODE" : "REAR_RESUME_REQUESTED",
+        } });
+        return { status: "RECEIVED", reasonCode: mode === "quiet" ? "LOCAL_REAR_QUIET_MODE" : "REAR_RESUME_REQUESTED" };
+      }
       case "connectivity.mode.report": {
         const signal: ContextSignal<{ mode: ConnectivityMode; evidence: string }> = {
           signalId: `command:${envelope.commandId}`,
@@ -861,6 +893,16 @@ export class CoreRuntime {
         occurredAt: this.now(),
         payload: load,
       });
+      if (load.level === "high" || load.level === "critical") {
+        // A Premium Journey consent prompt must yield when driver attention changes.
+        for (const proposal of this.state.activeProposals.filter(p => p.status === "awaiting_consent" && p.payload?.competitionScenario === "premium-journey")) {
+          const decision = this.evaluateProposal(proposal);
+          if (decision.outcome === "DEFER") {
+            this.emit({ type: "proposal.policy.decided", sessionId: this.sessionId, traceId, commandId, occurredAt: this.now(), payload: { decision } });
+            this.changeProposalStatus(proposal.proposalId, "deferred", decision.reasonCode, traceId, commandId);
+          }
+        }
+      }
       if (load.level === "low" || load.level === "normal") {
         this.releaseDeferredProposals(traceId, commandId);
       }
@@ -928,6 +970,15 @@ export class CoreRuntime {
         }
       }
     }
+  }
+
+  /** Trusted server coordinator only; not a client-side authorization bypass. */
+  replaceCabinJourney(placeIds: string[], traceId: string): void {
+    const stops = placeIds.map(id => [...this.state.journey.stops].reverse().find(stop => stop.placeId === id));
+    if (stops.some(stop => !stop)) throw new Error("JOURNEY_STOP_NOT_FOUND");
+    const journey = { stops: stops as JourneyStop[] };
+    this.persistJourney?.(structuredClone(journey));
+    this.emit({type: "journey.stops.replaced", sessionId: this.sessionId, traceId, commandId: null, occurredAt: this.now(), payload: journey});
   }
 
   private addJourneyStop(

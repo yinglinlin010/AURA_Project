@@ -13,3 +13,21 @@ ml/aura_distill/data/review_queue.jsonl
 ml/aura_distill/data/splits/
 ml/aura_distill/train/outputs/
 ml/aura_distill/train/checkpoints/
+
+# Isolated PACT build toolchains and generated Android assets
+.pact-tools/
+apps/web-simulator/dist-pact/
+apps/android-automotive/.gradle/
+apps/android-automotive/**/build/
+apps/android-automotive/local.properties
+
+# Local deliverable binaries
+artifacts/pact/*.apk
+
+# Local cabin trip checkpoints (no images or recordings)
+data/aura-cabin-state.json*
+
+data/aura-place-cache.json*
+
+# Downloaded local speech model weights
+data/models/

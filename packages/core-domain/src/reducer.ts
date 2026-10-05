@@ -13,6 +13,8 @@ export function reduceState(state: AuraSharedState, event: AuraDomainEvent): Aur
 
 function reduceDomainState(state: AuraSharedState, event: AuraDomainEvent): AuraSharedState {
   switch (event.type) {
+    case "demo.reset": return { ...event.payload.state, displayConnections: state.displayConnections };
+    case "rear.experience.changed": return { ...state, rearExperience: event.payload.experience };
     case "context.signal.received":
       return {
         ...state,
@@ -128,6 +130,8 @@ function reduceDomainState(state: AuraSharedState, event: AuraDomainEvent): Aura
         },
       };
     }
+    case "journey.stops.replaced":
+      return { ...state, journey: { stops: structuredClone(event.payload.stops) } };
     case "journey.stop.added":
       return {
         ...state,
@@ -137,7 +141,7 @@ function reduceDomainState(state: AuraSharedState, event: AuraDomainEvent): Aura
         },
       };
     case "connectivity.state.changed":
-      return { ...state, connectivity: { ...event.payload } };
+      return { ...state, connectivity: { ...event.payload }, rearExperience: { ...state.rearExperience, liveJourney: event.payload.mode !== "online" ? "unavailable" : state.rearExperience.mode === "quiet" ? "available_but_held" : "presented" } };
     case "safety.override.activated":
       // Keep the first active warning until a matching supervisor clear event;
       // product semantics for replacing or acknowledging one are unspecified.
@@ -150,7 +154,7 @@ function reduceDomainState(state: AuraSharedState, event: AuraDomainEvent): Aura
         ? { ...state, activeSafetyWarning: null }
         : state;
     case "proposal.policy.decided":
-      return state;
+      return { ...state, activeProposals: state.activeProposals.map(proposal => proposal.proposalId === event.payload.decision.proposalId ? { ...proposal, lastDecision: event.payload.decision } : proposal) };
     case "proposal.consent.recorded":
       return event.payload.decision === "approve"
         ? {

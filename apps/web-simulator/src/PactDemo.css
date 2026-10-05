@@ -1,0 +1,71 @@
+.pact-shell { max-width: 1600px; margin: auto; padding: 24px 36px; color: var(--bone); }
+.pact-shell header { display: flex; align-items: center; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.pact-shell h1 { margin: 0; font-size: 28px; letter-spacing: .08em; }
+.pact-shell h2 { font-size: 20px; margin: 0 0 12px; }
+.pact-shell h3 { font-size: 30px; margin: 24px 0 12px; overflow-wrap: anywhere; }
+.pact-shell p { color: #c6c6c9; line-height: 1.6; margin: 8px 0; }
+.pact-shell a { color: var(--warm); margin-left: auto; }
+.pact-shell header > span { color: var(--warm); font-size: 13px; }
+.pact-shell button { min-height: 44px; padding: 10px 16px; color: var(--bone); background: var(--slate); border: 1px solid #606064; border-radius: 8px; cursor: pointer; }
+.pact-shell button:hover { background: #414144; }
+.pact-shell button:disabled { opacity: .5; cursor: default; }
+.pact-shell small { display: block; color: #c6c6c9; font-size: 13px; line-height: 1.5; }
+.pact-demo-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding: 28px 0; }
+.pact-demo-controls > div { flex: 1 1 450px; }
+.pact-demo-controls > button:first-of-type { color: #141415; background: var(--warm); }
+.pact-context { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; padding: 18px 0; border-block: 1px solid var(--line); }
+.pact-context strong { color: #f5bc92; }
+.pact-context label { font-size: 14px; }
+.pact-context input[type=range] { display: block; width: 160px; accent-color: var(--warm); }
+.pact-displays { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 24px; padding: 28px 0; }
+.pact-display { min-width: 0; }
+.pact-display h2 small { margin-top: 6px; font-size: 11px; letter-spacing: .06em; }
+.pact-screen-content { background: var(--matte); border: 1px solid #515155; border-radius: 12px; padding: 24px; min-height: 325px; }
+.pact-temperature { display: flex; align-items: baseline; gap: 24px; margin: 28px 0; }
+.pact-temperature strong { font-size: 32px; font-variant-numeric: tabular-nums; }
+.pact-temperature span { color: #c6c6c9; }
+.pact-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pact-consent { padding: 12px 0; }
+.pact-consent > div { border-bottom: 1px solid var(--line); padding: 10px 0; }
+.pact-consent .pact-actions { margin-top: 12px; }
+.pact-ledger { display: grid; grid-template-columns: 1fr 1.5fr; gap: 36px; border-top: 1px solid var(--line); padding-top: 28px; }
+.pact-ledger form { display: grid; gap: 16px; }
+.pact-ledger label { display: grid; gap: 8px; }
+.pact-ledger input, .pact-ledger select { width: 100%; min-height: 44px; color: var(--bone); background: var(--slate); border: 1px solid #606064; padding: 10px; border-radius: 8px; font: inherit; caret-color: var(--warm); }
+.pact-ledger input::placeholder { color: #c6c6c9; }
+.pact-ledger input:focus-visible, .pact-ledger select:focus-visible { outline: 2px solid var(--warm); outline-offset: 3px; }
+.pact-ledger ol { list-style: none; padding: 0; margin: 0; max-height: 340px; overflow-y: auto; }
+.pact-ledger li { display: flex; align-items: baseline; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.pact-ledger li b { width: 80px; flex-shrink: 0; font-size: 13px; }
+.pact-execute, .pact-route { color: #abd8b5; }.pact-ask, .pact-defer { color: #f5bc92; }.pact-reject { color: #ffaca5; }
+@media(max-width: 1000px) { .pact-displays { grid-template-columns: 1fr; }.pact-screen-content { min-height: 0; }.pact-ledger { grid-template-columns: 1fr; } }
+@media(max-width: 600px) { .pact-shell { padding: 20px; }.pact-shell header { flex-wrap: wrap; }.pact-shell header > span { width: 100%; }.pact-shell h3 { font-size: 26px; } }
+/* Automotive windows have a short usable height between the system bars. */
+@media (min-width: 1000px) and (max-height: 800px) {
+  .pact-bundled { padding: 12px 24px; }
+  .pact-bundled header { padding-bottom: 10px; }
+  .pact-bundled header h1 { font-size: 24px; }
+  .pact-bundled header p { margin: 3px 0; }
+  .pact-bundled .pact-demo-controls { padding: 12px 0; gap: 12px; }
+  .pact-bundled h2 { font-size: 18px; margin-bottom: 6px; }
+  .pact-bundled .pact-demo-controls p { font-size: 13px; margin: 4px 0; }
+  .pact-bundled .pact-context { padding: 10px 0; gap: 16px; }
+  .pact-bundled .pact-displays { padding: 14px 0; gap: 20px; }
+  .pact-bundled .pact-screen-content { min-height: 230px; padding: 16px; }
+  .pact-bundled h3 { font-size: 24px; margin: 12px 0 8px; }
+  .pact-bundled .pact-temperature { margin: 14px 0; }
+  .pact-bundled .pact-temperature strong { font-size: 28px; }
+  .pact-bundled .pact-consent { padding: 4px 0; }
+  .pact-bundled .pact-consent > div { padding: 4px 0; }
+  .pact-bundled .pact-ledger { padding-top: 18px; }
+}
+.pact-tasks { border-top: 1px solid var(--line); padding: 16px 0; }
+.pact-tasks summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
+.pact-tasks label { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
+.pact-tasks select { min-height: 44px; padding: 8px; color: var(--bone); background: var(--slate); border: 1px solid #606064; border-radius: 8px; font: inherit; }
+.pact-tasks select:focus-visible { outline: 2px solid var(--warm); outline-offset: 3px; }
+.pact-tasks ul { list-style: none; padding: 0; margin: 0; }
+.pact-tasks li { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.pact-tasks li > span { flex: 1 1 250px; }
+.pact-tasks li b { color: var(--warm); font-size: 14px; }
+.pact-consent > strong { color: var(--warm); }

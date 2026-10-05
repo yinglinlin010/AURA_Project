@@ -1,18 +1,17 @@
+import type { CabinSnapshot, CabinCommand, CabinResultMessage } from '../../../../contracts/protocol/src/cabin';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CANONICAL_PRESENCE_STATES, type ActiveTask, type ConnectivityMode, type PresenceSnapshot, type SignalSource, type TaskLifecycleCommand } from '../../../../contracts/protocol/src/types';
+import { CANONICAL_PRESENCE_STATES, type RearExperienceState, type ActiveTask, type ConnectivityMode, type PresenceSnapshot, type SignalSource, type TaskLifecycleCommand } from '../../../../contracts/protocol/src/types';
 import { acceptGatewayEvent, acceptGatewaySnapshot, createGatewayOrderCursor, establishGatewaySession, type GatewayDomainEvent } from './gateway-order';
+import { readPremiumJourneyPoint, type PremiumJourneyPoint } from '../../../../packages/core-domain/src/premium-journey';
+import type { ContextSignal } from '../../../../contracts/protocol/src/types';
 import { reconnectDelayMs } from './reconnect-policy';
+import { DISPLAY_REGISTRATIONS, OVERVIEW_SELECTION, canUseDisplay, canSendDisplayCommand, isTrustedDisplayWelcome, selectedDisplayRegistrations, type BrowserDisplaySelection, type DisplayId } from './browser-display-selection';
+export { DISPLAY_REGISTRATIONS } from './browser-display-selection';
+export type { DisplayId } from './browser-display-selection';
 
 const PROTOCOL_VERSION = 1 as const;
-const GATEWAY_URL = import.meta.env.VITE_AURA_WS_URL ?? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname || 'localhost'}:${import.meta.env.VITE_AURA_WS_PORT ?? '8080'}/ws`;
-export const DISPLAY_REGISTRATIONS = [
-  { displayId: 'cluster-main', deviceId: 'main-computer', role: 'cluster' },
-  { displayId: 'center-main', deviceId: 'main-computer', role: 'center' },
-  { displayId: 'front-passenger-main', deviceId: 'main-computer', role: 'front_passenger' },
-  { displayId: 'rear-tablet', deviceId: 'rear-tablet-device', role: 'rear' },
-  { displayId: 'window-tablet', deviceId: 'rear-tablet-device', role: 'interactive_window' },
-] as const;
-export type DisplayId = (typeof DISPLAY_REGISTRATIONS)[number]['displayId'];
+const premiumEntry = ['scenario', 'debug', 'demo'].some(key => new URLSearchParams(window.location.search).get(key) === 'premium-journey');
+const GATEWAY_URL = import.meta.env.VITE_AURA_WS_URL ?? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname || 'localhost'}:${import.meta.env.VITE_AURA_WS_PORT ?? (premiumEntry ? '8081' : '8080')}/ws`;
 type DisplayRole = (typeof DISPLAY_REGISTRATIONS)[number]['role'];
 type LoadLevel = 'low' | 'normal' | 'high' | 'critical' | null;
 type GatewayStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -21,6 +20,9 @@ export type VoiceStatus = 'IDLE' | 'REQUESTING_PERMISSION' | 'CONNECTING' | 'LIS
 export interface VoiceState { status: VoiceStatus; inputTranscript: string; outputTranscript: string; error: string | null; }
 interface VoiceResources { stream: MediaStream; context: AudioContext; source: MediaStreamAudioSourceNode; worklet: AudioWorkletNode; mute: GainNode; }
 export interface SharedProposal {
+  lastDecision?: { decidedAt: number; outcome: string; reasonCode: string; traceId: string };
+  requestedByRole?: string;
+  traceId?: string;
   proposalId: string;
   kind: string;
   summary: string;
@@ -33,7 +35,7 @@ export interface SharedProposal {
   lastPolicyReason?: string;
   payload?: Record<string, unknown>;
 }
-export interface SharedStop { stopId: string; sourceProposalId: string; label: string; addedAt: number; }
+export interface SharedStop { placeId?: string; stopId: string; sourceProposalId: string; label: string; addedAt: number; }
 export interface TransientPlace {
   provider: 'mapbox-search-box'; placeId: string; displayName: string; formattedAddress?: string;
   location?: { latitude: number; longitude: number }; types: string[]; attribution: string;
@@ -59,7 +61,7 @@ export interface DisplayConnection { status: GatewayStatus; sessionId: string | 
 export interface RecommendationProposal { proposalId: string; kind: string; summary: string; targetRole: string; priority: string; requiresConsent: boolean; payload: Record<string, unknown>; }
 export interface RecommendationEvidenceSummary { criterion: string; source: string; sourceLabel: string; observedAt: number; freshness: string; }
 export interface RecommendationOptionSummary { placeId: string; label: string; rationale: string[]; evidence: RecommendationEvidenceSummary[]; }
-export interface RecommendationSummary { score: number; simulated: boolean; evidenceCoverage: number; rationale: string[]; evidence: RecommendationEvidenceSummary[]; wholeJourneyContext: RecommendationEvidenceSummary[]; alternatives: RecommendationOptionSummary[]; }
+export interface RecommendationSummary { aiAnalysis?: import('../../../../contracts/protocol/src/types').JourneyAiAnalysis; score: number; simulated: boolean; evidenceCoverage: number; rationale: string[]; evidence: RecommendationEvidenceSummary[]; wholeJourneyContext: RecommendationEvidenceSummary[]; alternatives: RecommendationOptionSummary[]; }
 export type JourneyRecommendationState =
   | { status: 'idle'; requestId: null; requestText: '' }
   | { status: 'pending'; requestId: string; requestText: string }
@@ -68,6 +70,9 @@ export type JourneyRecommendationState =
   | { status: 'abstained'; requestId: string; requestText: string; reasonCode: string }
   | { status: 'error'; requestId: string | null; requestText: string; errorCode: string; message: string };
 export interface GatewayState {
+  journeyPoint: PremiumJourneyPoint | null;
+  rearExperience: RearExperienceState;
+  rearDecision?: { actor: string; decision: string; mode: 'normal' | 'quiet'; reasonCode: string; traceId: string; decidedAt: number } | null;
   speedKph: number;
   load: LoadLevel;
   connectivity: { mode: ConnectivityMode; source: SignalSource };
@@ -83,6 +88,9 @@ const initialConnections = Object.fromEntries(DISPLAY_REGISTRATIONS.map(({ displ
   status: 'connecting' as const, sessionId: null, deviceId, role, lastMessage: 'Connecting to gateway',
 }])) as Record<DisplayId, DisplayConnection>;
 const initialState: GatewayState = {
+  journeyPoint: null,
+  rearDecision: null,
+  rearExperience: { mode: "normal", liveJourney: "unavailable", source: "scenario-fixture" },
   speedKph: 94,
   load: null,
   connectivity: { mode: 'degraded', source: 'derived' },
@@ -111,12 +119,23 @@ const latestPresence = (current: PresenceSnapshot | null, candidate: unknown): P
   return candidate;
 };
 
-export function useAuraCommand() {
+export function useAuraCommand(selection: BrowserDisplaySelection = OVERVIEW_SELECTION) {
+  // Entry is fixed for this mounted page; changing roles requires a reload/remount.
+  const [entry] = useState(() => selection);
+  const [registrations] = useState(() => selectedDisplayRegistrations(entry));
+  const [entryInitialState] = useState<GatewayState>(() => ({ ...initialState,
+    connections: Object.fromEntries(DISPLAY_REGISTRATIONS.map((registration) => [registration.displayId, {
+      ...initialConnections[registration.displayId],
+      ...(!canUseDisplay(entry, registration.displayId) ? { status: 'disconnected' as const, lastMessage: 'Display not selected by this browser entry' } : {}),
+    }])) as GatewayState['connections'],
+  }));
+  const [cabinByDisplay, setCabinByDisplay] = useState<Partial<Record<DisplayId,CabinSnapshot>>>({});
+  const cabinRequests = useRef(new Map<string,{ displayId:DisplayId; resolve:(value:CabinResultMessage)=>void; reject:(error:Error)=>void; timer:ReturnType<typeof setTimeout> }>());
   const socketsRef = useRef<Partial<Record<DisplayId, WebSocket>>>({});
   const gatewayOrderRef = useRef(createGatewayOrderCursor());
   const centerTaskSequenceRef = useRef<number | null>(null);
   const pendingTaskCommandRef = useRef<string | null>(null);
-  const stateRef = useRef<GatewayState>(initialState);
+  const stateRef = useRef<GatewayState>(entryInitialState);
   const voiceResourcesRef = useRef<VoiceResources | null>(null);
   const pendingAudioContextRef = useRef<AudioContext | null>(null);
   const playbackSourcesRef = useRef(new Set<AudioBufferSourceNode>());
@@ -131,7 +150,7 @@ export function useAuraCommand() {
   const outputSampleRateRef = useRef(24000);
   const playbackCursorRef = useRef(0);
   const [voice, setVoice] = useState<VoiceState>({ status: 'IDLE', inputTranscript: '', outputTranscript: '', error: null });
-  const [state, setState] = useState<GatewayState>(initialState);
+  const [state, setState] = useState<GatewayState>(entryInitialState);
   const [discovery, setDiscovery] = useState<DiscoveryState>({ origin: emptySearch(), destination: emptySearch(), route: emptyRoute() });
   const [recommendation, setRecommendation] = useState<JourneyRecommendationState>(emptyRecommendation);
   const [taskReceipt, setTaskReceipt] = useState<{ commandId: string; status: string; reasonCode?: string } | null>(null);
@@ -200,11 +219,12 @@ export function useAuraCommand() {
     const failedAttempts = new Map<DisplayId, number>();
     const seenSessions = new Set<string>();
     const reconnecting = new Set<DisplayId>();
+    const rejectedRegistrations = new Set<DisplayId>();
     let resyncRequested = false;
     let mounted = true;
     // Retries are isolated per display socket; a successful open restarts that socket's backoff.
     const scheduleReconnect = (registration: (typeof DISPLAY_REGISTRATIONS)[number]) => {
-      if (!mounted || retryTimers.has(registration.displayId)) return;
+      if (!mounted || rejectedRegistrations.has(registration.displayId) || retryTimers.has(registration.displayId)) return;
       const attempt = failedAttempts.get(registration.displayId) ?? 0;
       failedAttempts.set(registration.displayId, attempt + 1);
       const timer = setTimeout(() => {
@@ -238,9 +258,12 @@ export function useAuraCommand() {
         };
         const applyDomainEvent = (event: GatewayDomainEvent) => {
           const payload = event.payload as any;
-          if (event.type === 'vehicle.state.updated') setState((current) => ({ ...current, speedKph: payload.vehicle?.speedKph ?? current.speedKph }));
+          if (event.type === 'context.signal.received' && payload.signal?.type === 'journey.point') setState(current => ({ ...current, journeyPoint: readPremiumJourneyPoint(payload.signal) }));
+          else if (event.type === 'vehicle.state.updated') setState((current) => ({ ...current, speedKph: payload.vehicle?.speedKph ?? current.speedKph }));
           else if (event.type === 'driver.load.updated') setState((current) => ({ ...current, load: payload.level ?? current.load }));
-          else if (event.type === 'connectivity.state.changed') setState((current) => ({ ...current, connectivity: { mode: payload.mode ?? current.connectivity.mode, source: payload.source ?? current.connectivity.source } }));
+          else if (event.type === 'demo.reset') setState((current) => ({ ...current, journeyPoint: readPremiumJourneyPoint(payload.state.latestSignals?.['journey.point']), speedKph: 0, load: null, proposals: [], journeyStops: [], activeTasks: [], activeSafetyWarning: null, rearDecision: null, connectivity: payload.state.connectivity, rearExperience: payload.state.rearExperience }));
+          else if (event.type === 'rear.experience.changed') setState((current) => ({ ...current, rearExperience: payload.experience, rearDecision: { actor: payload.actor, decision: payload.decision, mode: payload.experience.mode, reasonCode: payload.reasonCode, traceId: payload.experience.traceId, decidedAt: payload.experience.decidedAt } }));
+          else if (event.type === 'connectivity.state.changed') setState((current) => ({ ...current, connectivity: { mode: payload.mode ?? current.connectivity.mode, source: payload.source ?? current.connectivity.source }, rearExperience: { ...current.rearExperience, liveJourney: payload.mode !== 'online' ? 'unavailable' : current.rearExperience.mode === 'quiet' ? 'available_but_held' : 'presented' } }));
           else if (event.type === 'proposal.created') {
             if (payload.proposal) setState((current) => ({ ...current, proposals: updateProposal(current.proposals, payload.proposal) }));
           } else if (event.type === 'proposal.status.changed') {
@@ -251,7 +274,9 @@ export function useAuraCommand() {
             setState((current) => ({ ...current, proposals: current.proposals.map((proposal) => proposal.proposalId === proposalId ? { ...proposal, consentGranted: decision === 'approve' } : proposal) }));
           } else if (event.type === 'proposal.policy.decided') {
             const decision = payload.decision;
-            if (decision) setState((current) => ({ ...current, proposals: current.proposals.map((proposal) => proposal.proposalId === decision.proposalId ? { ...proposal, lastOutcome: decision.outcome, lastPolicyReason: decision.reasonCode } : proposal) }));
+            if (decision) setState((current) => ({ ...current, proposals: current.proposals.map((proposal) => proposal.proposalId === decision.proposalId ? { ...proposal, lastDecision: decision, lastOutcome: decision.outcome, lastPolicyReason: decision.reasonCode } : proposal) }));
+          } else if (event.type === 'journey.stops.replaced') {
+            setState(current => ({...current, journeyStops: Array.isArray(payload.stops) ? payload.stops : current.journeyStops}));
           } else if (event.type === 'journey.stop.added') {
             const stop = payload.stop;
             if (stop) setState((current) => ({ ...current, journeyStops: current.journeyStops.some((item) => item.stopId === stop.stopId) ? current.journeyStops : [...current.journeyStops, stop] }));
@@ -304,12 +329,32 @@ export function useAuraCommand() {
             data = JSON.parse(String(message.data)) as GatewayMessage;
           }
           catch { setConnection({ lastMessage: 'Received invalid gateway JSON' }); return; }
+          if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            setConnection({ lastMessage: 'Received invalid gateway message' }); return;
+          }
+          if (data.kind !== 'welcome' && (socketSessionId === null || socketSessionId !== gatewayOrderRef.current.sessionId)) return;
+          if (data.kind !== 'welcome' && 'protocolVersion' in data && data.protocolVersion !== PROTOCOL_VERSION) return;
+          if(data.kind === 'cabin.state') {
+            if(data.state && Number.isInteger(data.state.revision)) setCabinByDisplay(current=>({...current,[registration.displayId]:data.state}));
+            return;
+          }
+          if(data.kind === 'cabin.result') {
+            const pending=cabinRequests.current.get(data.requestId);
+            if(pending && pending.displayId === registration.displayId) {clearTimeout(pending.timer);cabinRequests.current.delete(data.requestId);if(data.status==='ok')pending.resolve(data as CabinResultMessage);else pending.reject(new Error(data.errorCode??'CABIN_REQUEST_FAILED'));}
+            return;
+          }
           if (data.kind === 'welcome') {
-            const nextCursor = data.protocolVersion === PROTOCOL_VERSION && data.displayId === registration.displayId && data.role === registration.role
+            const nextCursor = socketSessionId === null && isTrustedDisplayWelcome(registration, data)
               ? establishGatewaySession(gatewayOrderRef.current, data)
               : null;
             if (!nextCursor) {
+              rejectedRegistrations.add(registration.displayId);
+              socketSessionId = null;
+              const retryTimer = retryTimers.get(registration.displayId);
+              if (retryTimer) clearTimeout(retryTimer);
+              retryTimers.delete(registration.displayId);
               setConnection({ sessionId: null, status: 'error', lastMessage: 'Gateway welcome did not match this display registration' });
+              socket.close();
             } else {
               // Reset exponential backoff only after registration is accepted,
               // not merely after the transport socket opens.
@@ -323,7 +368,7 @@ export function useAuraCommand() {
                 setTaskReceipt(null);
                 resyncRequested = false;
                 setState((current) => ({ ...current, speedKph: initialState.speedKph, load: initialState.load,
-                  connectivity: initialState.connectivity, proposals: [], journeyStops: [], activeSafetyWarning: null, activeTasks: [], presence: null }));
+                  journeyPoint: null, rearDecision: null, rearExperience: initialState.rearExperience, connectivity: initialState.connectivity, proposals: [], journeyStops: [], activeSafetyWarning: null, activeTasks: [], presence: null }));
               } else gatewayOrderRef.current = nextCursor;
               socketSessionId = nextCursor.sessionId;
               setConnection({ sessionId: data.sessionId, status: 'connected', lastMessage: `Registered as ${data.displayId} / ${data.role}` });
@@ -332,6 +377,8 @@ export function useAuraCommand() {
             }
           } else if (data.kind === 'snapshot') {
             const snapshot = data.snapshot;
+            if (snapshot?.protocolVersion !== PROTOCOL_VERSION ||
+                (snapshot.displayId !== undefined && snapshot.displayId !== registration.displayId)) return;
             const shared = snapshot?.state;
             if (registration.displayId === 'center-main' && snapshot?.sessionId === gatewayOrderRef.current.sessionId &&
                 Number.isSafeInteger(snapshot.sequence) && Array.isArray(shared?.activeTasks) &&
@@ -348,6 +395,9 @@ export function useAuraCommand() {
                 speedKph: shared.vehicle?.speedKph ?? current.speedKph,
                 load: shared.driver?.currentLoad ?? current.load,
                 connectivity: shared.connectivity ? { mode: shared.connectivity.mode, source: shared.connectivity.source } : current.connectivity,
+                journeyPoint: readPremiumJourneyPoint(shared.latestSignals?.['journey.point'] as ContextSignal | undefined),
+                rearExperience: shared.rearExperience ?? initialState.rearExperience,
+                rearDecision: current.rearDecision?.traceId === shared.rearExperience?.traceId ? current.rearDecision : null,
                 proposals: Array.isArray(shared.activeProposals) ? shared.activeProposals : current.proposals,
                 journeyStops: Array.isArray(shared.journey?.stops) ? shared.journey.stops : current.journeyStops,
                 activeSafetyWarning: shared.activeSafetyWarning ?? null,
@@ -365,6 +415,7 @@ export function useAuraCommand() {
             setState((current) => ({ ...current, presence: latestPresence(current.presence, data.presence) }));
           } else if (data.kind === 'event') {
             const event = data.event;
+            if (event?.sessionId !== socketSessionId || !Number.isSafeInteger(event.sequence) || event.sequence < 0) return;
             if (event?.type?.startsWith('task.')) applyCenterTaskEvent(event);
             const result = acceptGatewayEvent(gatewayOrderRef.current, event);
             if (result.overflow) {
@@ -447,6 +498,8 @@ export function useAuraCommand() {
               setRecommendation({ status: 'proposal', requestId: pendingRecommendation.requestId, requestText: pendingRecommendation.requestText, proposal: pendingRecommendation.proposal, recommendation: pendingRecommendation.recommendation, submissionError: receipt.reasonCode ?? 'ACTION_PROPOSAL_REJECTED' });
             }
           } else if (data.kind === 'error') {
+            const cabinRequest=cabinRequests.current.get(data.traceId);
+            if(cabinRequest?.displayId===registration.displayId){clearTimeout(cabinRequest.timer);cabinRequests.current.delete(data.traceId);cabinRequest.reject(new Error(data.code??'CABIN_REQUEST_FAILED'));}
             setConnection({ ...(data.code === 'DISPLAY_REGISTRATION_REJECTED' ? { status: 'error' as const } : {}), lastMessage: `${data.code}: ${data.message}` });
             // Discovery requests that fail gateway-side validation or role
             // authorization do not receive a typed discovery result. Clear
@@ -474,17 +527,20 @@ export function useAuraCommand() {
           }
         });
         socket.addEventListener('error', () => {
-          if (!mounted || socketsRef.current[registration.displayId] !== socket) return;
+          if (!mounted || rejectedRegistrations.has(registration.displayId) || socketsRef.current[registration.displayId] !== socket) return;
           reconnecting.add(registration.displayId);
           resyncRequested = false;
-          setConnection({ status: 'error', lastMessage: 'Gateway connection error' });
+          socketSessionId = null;
+          setConnection({ status: 'error', sessionId: null, lastMessage: 'Gateway connection error' });
           if (registration.displayId === 'front-passenger-main') setDiscovery({ origin: emptySearch(), destination: emptySearch(), route: emptyRoute() });
           scheduleReconnect(registration);
         });
         socket.addEventListener('close', () => {
-          if (!mounted || socketsRef.current[registration.displayId] !== socket) return;
+          if (!mounted || rejectedRegistrations.has(registration.displayId) || socketsRef.current[registration.displayId] !== socket) return;
+          for(const [id,request] of cabinRequests.current) if(request.displayId===registration.displayId){clearTimeout(request.timer);request.reject(new Error('GATEWAY_DISCONNECTED'));cabinRequests.current.delete(id);}
           reconnecting.add(registration.displayId);
           resyncRequested = false;
+          socketSessionId = null;
           setConnection({ status: 'disconnected', sessionId: null, lastMessage: 'Gateway connection closed' });
           if (registration.displayId === 'center-main' && pendingTaskCommandRef.current) {
             setTaskReceipt({ commandId: pendingTaskCommandRef.current, status: 'UNKNOWN', reasonCode: 'CONNECTION_LOST_CHECK_TASK_STATE' });
@@ -511,11 +567,19 @@ export function useAuraCommand() {
         scheduleReconnect(registration);
       }
     };
-    for (const registration of DISPLAY_REGISTRATIONS) connect(registration);
-    return () => { mounted = false; retryTimers.forEach(clearTimeout); retryTimers.clear(); releaseCapture(); if (recommendationTimeoutRef.current) clearTimeout(recommendationTimeoutRef.current); recommendationTimeoutRef.current = null; recommendationRequestRef.current = null; sockets.forEach((socket) => socket.close()); socketsRef.current = {}; };
-  }, [playPcm, releaseCapture, updateVoice]);
+    for (const registration of registrations) connect(registration);
+    return () => { for(const request of cabinRequests.current.values()){clearTimeout(request.timer);request.reject(new Error('GATEWAY_DISCONNECTED'));}cabinRequests.current.clear(); mounted = false; retryTimers.forEach(clearTimeout); retryTimers.clear(); releaseCapture(); if (recommendationTimeoutRef.current) clearTimeout(recommendationTimeoutRef.current); recommendationTimeoutRef.current = null; recommendationRequestRef.current = null; sockets.forEach((socket) => socket.close()); socketsRef.current = {}; };
+  }, [playPcm, releaseCapture, updateVoice, registrations]);
+
+  const sendCabin = useCallback((displayId:DisplayId,command:CabinCommand):Promise<CabinResultMessage>=>{
+    const socket=socketsRef.current[displayId];
+    if(!canUseDisplay(entry,displayId)||!socket||socket.readyState!==WebSocket.OPEN||!stateRef.current.connections[displayId].sessionId)return Promise.reject(new Error('GATEWAY_DISCONNECTED'));
+    const requestId=crypto.randomUUID();
+    return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{cabinRequests.current.delete(requestId);reject(new Error('CABIN_TIMEOUT'));},120000);cabinRequests.current.set(requestId,{displayId,resolve,reject,timer});try{socket.send(JSON.stringify({kind:'cabin.command',protocolVersion:1,requestId,command}));}catch{clearTimeout(timer);cabinRequests.current.delete(requestId);reject(new Error('GATEWAY_DISCONNECTED'));}});
+  },[entry]);
 
   const startVoice = useCallback(async () => {
+    if (!canUseDisplay(entry, 'center-main')) return false;
     if (voiceStatusRef.current !== 'IDLE' && voiceStatusRef.current !== 'ERROR') return false;
     const attempt = ++voiceAttemptRef.current;
     playbackCursorRef.current = 0;
@@ -621,7 +685,7 @@ export function useAuraCommand() {
       updateVoice({ status: 'ERROR', error: detail });
       return false;
     }
-  }, [releaseCapture, updateVoice]);
+  }, [releaseCapture, updateVoice, entry]);
 
   const stopVoice = useCallback(() => {
     const wasRequestingPermission = voiceStatusRef.current === 'REQUESTING_PERMISSION';
@@ -647,6 +711,7 @@ export function useAuraCommand() {
   }, [releaseCapture, updateVoice]);
 
   const sendCommand = useCallback((displayId: DisplayId, command: { type: string; payload: Record<string, unknown> }, onSent?: (commandId: string) => void) => {
+    if (!canSendDisplayCommand(entry, displayId, command.type)) return false;
     const socket = socketsRef.current[displayId];
     const sessionId = state.connections[displayId].sessionId;
     if (!socket || socket.readyState !== WebSocket.OPEN || !sessionId) {
@@ -671,9 +736,10 @@ export function useAuraCommand() {
     }));
     setState((current) => ({ ...current, connections: { ...current.connections, [displayId]: { ...current.connections[displayId], lastMessage: `Sent ${command.type}; awaiting gateway receipt` } } }));
     return true;
-  }, [state.connections]);
+  }, [state.connections, entry]);
 
   const sendTaskCommand = useCallback((command: TaskLifecycleCommand) => {
+    if (!canUseDisplay(entry, 'center-main')) return false;
     const connection = state.connections['center-main'];
     const socket = socketsRef.current['center-main'];
     if (!socket || socket.readyState !== WebSocket.OPEN || !connection.sessionId || pendingTaskCommandRef.current) return false;
@@ -686,15 +752,16 @@ export function useAuraCommand() {
       sender: { deviceId: connection.deviceId, displayId: 'center-main' }, command,
     }));
     return true;
-  }, [state.connections]);
+  }, [state.connections, entry]);
 
   const sendDiscovery = useCallback((message: Record<string, unknown>) => {
+    if (!canUseDisplay(entry, 'front-passenger-main')) return false;
     const displayId: DisplayId = 'front-passenger-main';
     const socket = socketsRef.current[displayId];
     if (!socket || socket.readyState !== WebSocket.OPEN || !stateRef.current.connections[displayId].sessionId) return false;
     socket.send(JSON.stringify(message));
     return true;
-  }, []);
+  }, [entry]);
 
   const searchPlaces = useCallback((slot: 'origin' | 'destination', query: string) => {
     const trimmed = query.trim();
@@ -722,6 +789,7 @@ export function useAuraCommand() {
   }, [sendDiscovery]);
 
   const requestJourneyRecommendation = useCallback((requestText: string) => {
+    if (!canUseDisplay(entry, 'center-main')) return false;
     const trimmed = requestText.trim();
     if (!trimmed || trimmed.length > 1000) {
       setRecommendation({ status: 'error', requestId: null, requestText: trimmed.slice(0, 1000), errorCode: 'REQUEST_TEXT_INVALID', message: trimmed ? 'Keep the request to 1,000 characters or fewer.' : 'Enter a natural-language journey request first.' });
@@ -754,7 +822,7 @@ export function useAuraCommand() {
       setRecommendation({ status: 'error', requestId, requestText: trimmed, errorCode: 'RECOMMENDATION_TIMEOUT', message: 'No recommendation result arrived within 30 seconds. You can try again.' });
     }, 30_000);
     return true;
-  }, []);
+  }, [entry]);
 
   const submitJourneyRecommendation = useCallback((proposal: RecommendationProposal) => {
     if (recommendation.status !== 'proposal' || recommendation.proposal.proposalId !== proposal.proposalId) return false;
@@ -764,5 +832,5 @@ export function useAuraCommand() {
     return sent;
   }, [recommendation, sendCommand]);
 
-  return { state, sendCommand, sendTaskCommand, taskReceipt, voice, startVoice, stopVoice, discovery, searchPlaces, previewRoute, recommendation, requestJourneyRecommendation, submitJourneyRecommendation };
+  return { state, cabinByDisplay, sendCabin, sendCommand, sendTaskCommand, taskReceipt, voice, startVoice, stopVoice, discovery, searchPlaces, previewRoute, recommendation, requestJourneyRecommendation, submitJourneyRecommendation };
 }

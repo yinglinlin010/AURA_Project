@@ -1,3 +1,5 @@
+import { CabinCoordinator, safeError } from './cabin-coordinator.js';
+import type { CabinCommandMessage, CabinRole } from '../../../contracts/protocol/src/cabin.js';
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
@@ -30,7 +32,7 @@ import { CoreRuntime } from "../../../packages/core-runtime/src/index.js";
 import type { VoiceRuntime } from "../../../packages/core-runtime/src/voice-runtime.js";
 import type { MapboxDirectionsAdapter } from "../../../adapters/maps/mapbox-directions-adapter.js";
 import type { MapboxSearchBoxAdapter } from "../../../adapters/maps/mapbox-search-box-adapter.js";
-import { recommendWholeJourney, type JourneyRecommendationEvidenceSource } from "../../../packages/core-runtime/src/journey-recommender.js";
+import { recommendWholeJourney, type JourneyRecommendationEvidenceSource, type JourneyAnalysisProvider } from "../../../packages/core-runtime/src/journey-recommender.js";
 import { GatewayVoiceOutput } from "./gateway-voice-output.js";
 
 interface ClientSession {
@@ -51,6 +53,8 @@ export interface HmiGatewayOptions {
   places?: MapboxSearchBoxAdapter;
   routing?: MapboxDirectionsAdapter;
   journeyRecommendations?: JourneyRecommendationEvidenceSource;
+  journeyAnalysis?: JourneyAnalysisProvider;
+  cabin?: CabinCoordinator;
 }
 
 export class HmiGateway {
@@ -67,6 +71,12 @@ export class HmiGateway {
   private readonly voiceOutput: GatewayVoiceOutput | undefined;
   private readonly places: MapboxSearchBoxAdapter | undefined;
   private readonly routing: MapboxDirectionsAdapter | undefined;
+  private readonly cabin: CabinCoordinator | undefined;
+  private readonly unsubscribeCabin: (() => void) | undefined;
+  private readonly cabinPending = new Set<ClientSession>();
+  private readonly cabinReceipts = new Map<string, import("../../../contracts/protocol/src/cabin.js").CabinResultMessage>();
+  private readonly journeyAnalysis: JourneyAnalysisProvider | undefined;
+  private readonly journeyRequests = new Set<ClientSession>();
   private readonly journeyRecommendations: JourneyRecommendationEvidenceSource | undefined;
   private voiceOwner: ClientSession | undefined;
   private presence: PresenceSnapshot = { state: "IDLE", revision: 0 };
@@ -77,11 +87,16 @@ export class HmiGateway {
   constructor(options: HmiGatewayOptions) {
     assertDisplayRegistry(options.registry);
     this.runtime = options.runtime;
+    this.cabin = options.cabin;
+    this.unsubscribeCabin = this.cabin?.subscribe(() => {
+      for (const client of this.clients) if(client.registration) this.sendCabinState(client);
+    });
     this.voice = options.voice;
     this.voiceOutput = options.voiceOutput;
     this.places = options.places;
     this.routing = options.routing;
     this.journeyRecommendations = options.journeyRecommendations;
+    this.journeyAnalysis = options.journeyAnalysis;
     this.registry = structuredClone(options.registry);
     this.host = options.host ?? "127.0.0.1";
     this.port = options.port ?? 8765;
@@ -104,7 +119,7 @@ export class HmiGateway {
       host: this.host,
       port: this.port,
       path: this.path,
-      maxPayload: 256 * 1024,
+      maxPayload: options.cabin ? 2 * 1024 * 1024 : 256 * 1024,
       perMessageDeflate: false,
     });
     this.server.on("connection", (socket) => this.accept(socket));
@@ -152,6 +167,8 @@ export class HmiGateway {
 
   close(): Promise<void> {
     this.unsubscribe();
+    this.unsubscribeCabin?.();
+    this.cabin?.close();
     this.unsubscribeVoice?.();
     this.voice?.close();
     for (const client of this.clients) client.socket.close(1001, "server shutdown");
@@ -182,11 +199,18 @@ export class HmiGateway {
     }
 
     if (!this.validator(value)) {
+      const invalid=value as Record<string,unknown> | null;
+      if(invalid && typeof invalid === "object" && invalid.kind === "cabin.command" && typeof invalid.requestId === "string" && invalid.requestId.length>0 && invalid.requestId.length<=100){
+        this.send(client.socket,{kind:"cabin.result",protocolVersion:1,requestId:invalid.requestId,status:"error",errorCode:"INVALID_MESSAGE"});return;
+      }
       this.sendError(client.socket, "INVALID_MESSAGE", "Message does not match protocol v1.");
       return;
     }
     const message = value as ClientMessage;
     switch (message.kind) {
+      case "cabin.command":
+        void this.cabinCommand(client, message);
+        return;
       case "register":
         this.register(client, message);
         break;
@@ -319,12 +343,18 @@ export class HmiGateway {
       return;
     }
 
+    if (this.journeyRequests.has(client)) {
+      this.sendError(client.socket, "JOURNEY_RECOMMENDATION_BUSY", "A recommendation is already running.", message.traceId);
+      return;
+    }
+    this.journeyRequests.add(client);
     let result: JourneyRecommendationResultMessage;
     try {
       result = await recommendWholeJourney({
         message,
         state: this.runtime.getState(),
         ...(this.journeyRecommendations === undefined ? {} : { source: this.journeyRecommendations }),
+        ...(this.journeyAnalysis === undefined ? {} : { analysis: this.journeyAnalysis }),
       });
     } catch {
       result = {
@@ -336,11 +366,13 @@ export class HmiGateway {
         reasonCode: "WHOLE_JOURNEY_RECOMMENDATION_UNAVAILABLE",
       };
     }
+    this.journeyRequests.delete(client);
     this.send(client.socket, result);
   }
 
   private async startVoice(client: ClientSession, traceId: string): Promise<void> {
     if (!client.registration) return this.sendError(client.socket, "REGISTRATION_REQUIRED", "Register a display before starting voice.", traceId);
+    if (["interactive_window", "cluster"].includes(client.registration.role)) return this.sendError(client.socket, "VOICE_ROLE_NOT_ALLOWED", "This display cannot control voice.", traceId);
     if (!this.voice || !this.voiceOutput) return this.sendError(client.socket, "VOICE_UNAVAILABLE", "Voice streaming is not configured on this host.", traceId);
     if (this.voiceOwner && this.voiceOwner !== client) return this.sendError(client.socket, "VOICE_SESSION_BUSY", "Another display owns the active voice stream.", traceId);
     this.voiceOwner = client;
@@ -357,6 +389,7 @@ export class HmiGateway {
 
   private async stopVoice(client: ClientSession, traceId: string): Promise<void> {
     if (!client.registration) return this.sendError(client.socket, "REGISTRATION_REQUIRED", "Register a display before stopping voice.", traceId);
+    if (["interactive_window", "cluster"].includes(client.registration.role)) return this.sendError(client.socket, "VOICE_ROLE_NOT_ALLOWED", "This display cannot control voice.", traceId);
     if (this.voiceOwner !== client || !this.voice) return this.sendError(client.socket, "VOICE_SESSION_NOT_OWNED", "This display does not own the active voice stream.", traceId);
     await this.voice.stop(traceId);
     this.voiceOwner = undefined;
@@ -365,6 +398,7 @@ export class HmiGateway {
 
   private async sendVoiceText(client: ClientSession, text: string, traceId: string): Promise<void> {
     if (!client.registration) return this.sendError(client.socket, "REGISTRATION_REQUIRED", "Register a display before sending voice text.", traceId);
+    if (["interactive_window", "cluster"].includes(client.registration.role)) return this.sendError(client.socket, "VOICE_ROLE_NOT_ALLOWED", "This display cannot control voice.", traceId);
     if (!this.voice || !this.voiceOutput) return this.sendError(client.socket, "VOICE_UNAVAILABLE", "Voice streaming is not configured on this host.", traceId);
     if (this.voiceOwner && this.voiceOwner !== client) return this.sendError(client.socket, "VOICE_SESSION_BUSY", "Another display owns the active voice stream.", traceId);
     this.voiceOwner = client;
@@ -386,6 +420,24 @@ export class HmiGateway {
     }
     void this.voice.sendAudioChunk(data, "audio/pcm;rate=16000", client.voiceTraceId ?? "voice-stream")
       .catch((error: unknown) => this.sendError(client.socket, error instanceof Error ? error.message : "VOICE_AUDIO_FAILED", "PCM frame could not be submitted."));
+  }
+
+  private sendCabinState(client: ClientSession): void {
+    if(this.cabin && client.registration) this.send(client.socket,{kind:'cabin.state',protocolVersion:1,state:this.cabin.snapshot(client.registration.role as CabinRole)});
+  }
+  private async cabinCommand(client: ClientSession, message: CabinCommandMessage): Promise<void> {
+    if(!client.registration) return this.sendError(client.socket,'REGISTRATION_REQUIRED','Register before using cabin features.',message.requestId);
+    if(!this.cabin) return this.sendError(client.socket,'CABIN_UNAVAILABLE','Cabin features are not configured.',message.requestId);
+    const key=`${client.registration.displayId}:${message.requestId}`;
+    const cached=this.cabinReceipts.get(key);if(cached){this.send(client.socket,cached);return;}
+    if(this.cabinPending.has(client)){this.send(client.socket,{kind:'cabin.result',protocolVersion:1,requestId:message.requestId,status:'error',errorCode:'CABIN_BUSY'});return;}
+    this.cabinPending.add(client);
+    let result: import('../../../contracts/protocol/src/cabin.js').CabinResultMessage;
+    try {const outcome=await this.cabin.command(message.command,client.registration);result={kind:'cabin.result',protocolVersion:1,requestId:message.requestId,...outcome};}
+    catch(error){result={kind:'cabin.result',protocolVersion:1,requestId:message.requestId,status:'error',errorCode:safeError(error)};}
+    finally{this.cabinPending.delete(client);}
+    this.cabinReceipts.set(key,result);while(this.cabinReceipts.size>100)this.cabinReceipts.delete(this.cabinReceipts.keys().next().value!);
+    this.send(client.socket,result);
   }
 
   private register(
@@ -417,6 +469,7 @@ export class HmiGateway {
       kind: "snapshot",
       snapshot: projectDisplaySnapshot(this.runtime.createSnapshot(registration.displayId, this.presence), registration),
     });
+    this.sendCabinState(client);
   }
 
   private command(
@@ -444,6 +497,14 @@ export class HmiGateway {
       return;
     }
 
+    if(this.cabin && envelope.command.type === 'action.consent') {
+      const proposalId=envelope.command.payload.proposalId;
+      const proposal=this.runtime.getState().activeProposals.find(p=>p.proposalId===proposalId);
+      if(proposal?.payload?.cabinBallot) {
+        this.sendError(client.socket,'CABIN_BALLOT_CONFIRMATION_REQUIRED','Confirm this proposal through the passenger ballot.',envelope.traceId);
+        return;
+      }
+    }
     const receipt = this.runtime.submitCommand(envelope);
     this.send(client.socket, {
       kind: "ack",
@@ -568,11 +629,13 @@ export class HmiGateway {
       const missed = this.runtime.eventBus.eventsAfter(message.afterSequence);
       if (missed.length > 0) {
         const proposals = this.runtime.getState().activeProposals;
-        for (const event of missed) {
-          const projected = projectDisplayEvent(event, client.registration, proposals);
-          if (projected) this.send(client.socket, { kind: "event", event: projected });
+        const projected = missed.map(event => projectDisplayEvent(event, client.registration!, proposals));
+        // Global sequence gaps from role-private events cannot be repaired by
+        // filtered replay. Send an authoritative role-projected snapshot instead.
+        if (projected.every(event => event !== null)) {
+          for (const event of projected) this.send(client.socket, { kind: "event", event });
+          return;
         }
-        return;
       }
     }
     this.send(client.socket, {

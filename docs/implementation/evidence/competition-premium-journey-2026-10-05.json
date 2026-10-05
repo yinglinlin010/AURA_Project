@@ -1,0 +1,535 @@
+{
+  "result": {
+    "scenarioId": "competition-premium-journey",
+    "startedAt": 1791142370582,
+    "finishedAt": 1791142370589,
+    "completedSteps": 9,
+    "commandReceipts": [
+      {
+        "commandId": "sim:competition-premium-journey:vip-add-journey",
+        "traceId": "scenario:competition-premium-journey",
+        "status": "RECEIVED",
+        "stateRevision": 7,
+        "replayed": false,
+        "reasonCode": "DRIVER_COGNITIVE_LOAD_HIGH"
+      },
+      {
+        "commandId": "sim:competition-premium-journey:driver-accept",
+        "traceId": "scenario:competition-premium-journey",
+        "status": "RECEIVED",
+        "stateRevision": 15,
+        "replayed": false,
+        "reasonCode": "JOURNEY_STOP_ADDED"
+      },
+      {
+        "commandId": "sim:competition-premium-journey:quiet-mode",
+        "traceId": "scenario:competition-premium-journey",
+        "status": "RECEIVED",
+        "stateRevision": 18,
+        "replayed": false,
+        "reasonCode": "LOCAL_REAR_QUIET_MODE"
+      },
+      {
+        "commandId": "sim:competition-premium-journey:resume",
+        "traceId": "scenario:competition-premium-journey",
+        "status": "RECEIVED",
+        "stateRevision": 21,
+        "replayed": false,
+        "reasonCode": "REAR_RESUME_REQUESTED"
+      }
+    ],
+    "decisionObservations": [
+      {
+        "stepId": "vip-add-journey",
+        "decision": {
+          "decisionId": "12f730f3-2e0e-4090-ab8c-f6de2555b187",
+          "proposalId": "premium-donghu",
+          "traceId": "scenario:competition-premium-journey",
+          "consentRequired": true,
+          "targetRole": "center",
+          "policyVersion": "aura-action-gate-v1",
+          "decidedAt": 1791142370587,
+          "outcome": "DEFER",
+          "reasonCode": "DRIVER_COGNITIVE_LOAD_HIGH",
+          "deferUntil": {
+            "type": "driver_load_below",
+            "currentThreshold": "high",
+            "reevaluateOn": "driver.cognitive_load"
+          }
+        }
+      },
+      {
+        "stepId": "load-normal",
+        "decision": {
+          "decisionId": "eb2102e8-ce2e-4568-be62-a31c0e163e62",
+          "proposalId": "premium-donghu",
+          "traceId": "scenario:competition-premium-journey",
+          "consentRequired": true,
+          "targetRole": "center",
+          "policyVersion": "aura-action-gate-v1",
+          "decidedAt": 1791142370588,
+          "outcome": "ASK",
+          "reasonCode": "DRIVER_LOAD_BELOW_DEFERRAL_THRESHOLD"
+        }
+      },
+      {
+        "stepId": "driver-accept",
+        "decision": {
+          "decisionId": "db266fcd-3160-4711-a9f8-d58913a5b942",
+          "proposalId": "premium-donghu",
+          "traceId": "scenario:competition-premium-journey",
+          "consentRequired": true,
+          "targetRole": "center",
+          "policyVersion": "aura-action-gate-v1",
+          "decidedAt": 1791142370588,
+          "outcome": "EXECUTE",
+          "reasonCode": "CONSENT_GRANTED_POLICY_REVALIDATED"
+        }
+      }
+    ],
+    "signalReceipts": [
+      {
+        "signalId": "sim:competition-premium-journey:cloud-connected",
+        "traceId": "scenario:competition-premium-journey",
+        "stateRevision": 2,
+        "sequence": 2
+      },
+      {
+        "signalId": "sim:competition-premium-journey:driver-busy",
+        "traceId": "scenario:competition-premium-journey",
+        "stateRevision": 4,
+        "sequence": 4
+      },
+      {
+        "signalId": "sim:competition-premium-journey:load-normal",
+        "traceId": "scenario:competition-premium-journey",
+        "stateRevision": 11,
+        "sequence": 11
+      },
+      {
+        "signalId": "sim:competition-premium-journey:cloud-offline",
+        "traceId": "scenario:competition-premium-journey",
+        "stateRevision": 17,
+        "sequence": 17
+      },
+      {
+        "signalId": "sim:competition-premium-journey:cloud-restored",
+        "traceId": "scenario:competition-premium-journey",
+        "stateRevision": 20,
+        "sequence": 20
+      }
+    ],
+    "signalObservations": [
+      {
+        "stepId": "cloud-connected",
+        "signalId": "sim:competition-premium-journey:cloud-connected",
+        "type": "connectivity.mode",
+        "freshness": "fresh"
+      },
+      {
+        "stepId": "driver-busy",
+        "signalId": "sim:competition-premium-journey:driver-busy",
+        "type": "driver.cognitive_load",
+        "freshness": "fresh"
+      },
+      {
+        "stepId": "load-normal",
+        "signalId": "sim:competition-premium-journey:load-normal",
+        "type": "driver.cognitive_load",
+        "freshness": "fresh"
+      },
+      {
+        "stepId": "cloud-offline",
+        "signalId": "sim:competition-premium-journey:cloud-offline",
+        "type": "connectivity.mode",
+        "freshness": "fresh"
+      },
+      {
+        "stepId": "cloud-restored",
+        "signalId": "sim:competition-premium-journey:cloud-restored",
+        "type": "connectivity.mode",
+        "freshness": "fresh"
+      }
+    ],
+    "connectivityTransitions": [
+      {
+        "stepId": "cloud-connected",
+        "from": "degraded",
+        "to": "online",
+        "source": "simulated",
+        "freshness": "fresh",
+        "sessionPreserved": true,
+        "journeyPreserved": true,
+        "proposalStatusesPreserved": true
+      },
+      {
+        "stepId": "cloud-offline",
+        "from": "online",
+        "to": "offline",
+        "source": "simulated",
+        "freshness": "fresh",
+        "sessionPreserved": true,
+        "journeyPreserved": true,
+        "proposalStatusesPreserved": true
+      },
+      {
+        "stepId": "cloud-restored",
+        "from": "offline",
+        "to": "online",
+        "source": "simulated",
+        "freshness": "fresh",
+        "sessionPreserved": true,
+        "journeyPreserved": true,
+        "proposalStatusesPreserved": true
+      }
+    ],
+    "routingObservations": [],
+    "perceptionObservations": [],
+    "proposalLifecycle": [
+      {
+        "stepId": "cloud-connected",
+        "proposals": []
+      },
+      {
+        "stepId": "driver-busy",
+        "currentLoad": "high",
+        "proposals": []
+      },
+      {
+        "stepId": "vip-add-journey",
+        "currentLoad": "high",
+        "proposals": [
+          {
+            "proposalId": "premium-donghu",
+            "kind": "ADD_TRIP_STOP",
+            "targetRole": "center",
+            "status": "deferred",
+            "consentGranted": false,
+            "lastReasonCode": "DRIVER_COGNITIVE_LOAD_HIGH"
+          }
+        ]
+      },
+      {
+        "stepId": "load-normal",
+        "currentLoad": "normal",
+        "proposals": [
+          {
+            "proposalId": "premium-donghu",
+            "kind": "ADD_TRIP_STOP",
+            "targetRole": "center",
+            "status": "awaiting_consent",
+            "consentGranted": false,
+            "lastReasonCode": "DRIVER_LOAD_BELOW_DEFERRAL_THRESHOLD"
+          }
+        ]
+      },
+      {
+        "stepId": "driver-accept",
+        "currentLoad": "normal",
+        "proposals": [
+          {
+            "proposalId": "premium-donghu",
+            "kind": "ADD_TRIP_STOP",
+            "targetRole": "center",
+            "status": "completed",
+            "consentGranted": true,
+            "lastReasonCode": "JOURNEY_STOP_ADDED"
+          }
+        ]
+      },
+      {
+        "stepId": "cloud-offline",
+        "currentLoad": "normal",
+        "proposals": [
+          {
+            "proposalId": "premium-donghu",
+            "kind": "ADD_TRIP_STOP",
+            "targetRole": "center",
+            "status": "completed",
+            "consentGranted": true,
+            "lastReasonCode": "JOURNEY_STOP_ADDED"
+          }
+        ]
+      },
+      {
+        "stepId": "quiet-mode",
+        "currentLoad": "normal",
+        "proposals": [
+          {
+            "proposalId": "premium-donghu",
+            "kind": "ADD_TRIP_STOP",
+            "targetRole": "center",
+            "status": "completed",
+            "consentGranted": true,
+            "lastReasonCode": "JOURNEY_STOP_ADDED"
+          }
+        ]
+      },
+      {
+        "stepId": "cloud-restored",
+        "currentLoad": "normal",
+        "proposals": [
+          {
+            "proposalId": "premium-donghu",
+            "kind": "ADD_TRIP_STOP",
+            "targetRole": "center",
+            "status": "completed",
+            "consentGranted": true,
+            "lastReasonCode": "JOURNEY_STOP_ADDED"
+          }
+        ]
+      },
+      {
+        "stepId": "resume",
+        "currentLoad": "normal",
+        "proposals": [
+          {
+            "proposalId": "premium-donghu",
+            "kind": "ADD_TRIP_STOP",
+            "targetRole": "center",
+            "status": "completed",
+            "consentGranted": true,
+            "lastReasonCode": "JOURNEY_STOP_ADDED"
+          }
+        ]
+      }
+    ],
+    "safetyObservations": [
+      {
+        "stepId": "cloud-connected",
+        "activeWarning": null
+      },
+      {
+        "stepId": "driver-busy",
+        "activeWarning": null
+      },
+      {
+        "stepId": "vip-add-journey",
+        "activeWarning": null
+      },
+      {
+        "stepId": "load-normal",
+        "activeWarning": null
+      },
+      {
+        "stepId": "driver-accept",
+        "activeWarning": null
+      },
+      {
+        "stepId": "cloud-offline",
+        "activeWarning": null
+      },
+      {
+        "stepId": "quiet-mode",
+        "activeWarning": null
+      },
+      {
+        "stepId": "cloud-restored",
+        "activeWarning": null
+      },
+      {
+        "stepId": "resume",
+        "activeWarning": null
+      }
+    ],
+    "voiceEvents": [],
+    "initialVoiceState": null,
+    "expectationResults": [
+      {
+        "path": "finalState/journey/stops/0/placeId",
+        "expected": "fixture-donghu",
+        "actual": "fixture-donghu",
+        "passed": true
+      },
+      {
+        "path": "finalState/rearExperience/mode",
+        "expected": "normal",
+        "actual": "normal",
+        "passed": true
+      },
+      {
+        "path": "finalState/rearExperience/liveJourney",
+        "expected": "presented",
+        "actual": "presented",
+        "passed": true
+      },
+      {
+        "path": "commands.quiet-mode.status",
+        "expected": "RECEIVED",
+        "actual": "RECEIVED",
+        "passed": true
+      },
+      {
+        "path": "commands.quiet-mode.reasonCode",
+        "expected": "LOCAL_REAR_QUIET_MODE",
+        "actual": "LOCAL_REAR_QUIET_MODE",
+        "passed": true
+      },
+      {
+        "path": "commands.resume.status",
+        "expected": "RECEIVED",
+        "actual": "RECEIVED",
+        "passed": true
+      },
+      {
+        "path": "commands.resume.reasonCode",
+        "expected": "REAR_RESUME_REQUESTED",
+        "actual": "REAR_RESUME_REQUESTED",
+        "passed": true
+      },
+      {
+        "path": "decisions.vip-add-journey.outcome",
+        "expected": "DEFER",
+        "actual": "DEFER",
+        "passed": true
+      },
+      {
+        "path": "decisions.vip-add-journey.reasonCode",
+        "expected": "DRIVER_COGNITIVE_LOAD_HIGH",
+        "actual": "DRIVER_COGNITIVE_LOAD_HIGH",
+        "passed": true
+      },
+      {
+        "path": "decisions.load-normal.outcome",
+        "expected": "ASK",
+        "actual": "ASK",
+        "passed": true
+      },
+      {
+        "path": "decisions.driver-accept.outcome",
+        "expected": "EXECUTE",
+        "actual": "EXECUTE",
+        "passed": true
+      },
+      {
+        "path": "metrics.journeyStopCount.equals",
+        "expected": 1,
+        "actual": 1,
+        "passed": true
+      },
+      {
+        "path": "metrics.completedSteps.equals",
+        "expected": 9,
+        "actual": 9,
+        "passed": true
+      }
+    ],
+    "voiceStepObservations": [],
+    "taskLifecycleObservations": []
+  },
+  "finalState": {
+    "revision": 21,
+    "rearExperience": {
+      "mode": "normal",
+      "decidedAt": 1791142370589,
+      "traceId": "scenario:competition-premium-journey",
+      "reasonCode": "REAR_RESUME_REQUESTED",
+      "source": "scenario-fixture",
+      "liveJourney": "presented"
+    },
+    "vehicle": {
+      "speedKph": 0,
+      "gear": "UNKNOWN",
+      "drivingState": "unknown"
+    },
+    "driver": {
+      "currentLoad": "normal",
+      "loadObservedAt": 1791142392082,
+      "loadConfidence": 0.95
+    },
+    "activeProposals": [
+      {
+        "proposalId": "premium-donghu",
+        "kind": "ADD_TRIP_STOP",
+        "summary": "Donghu · +12 min — SIMULATED JOURNEY CONTEXT",
+        "targetRole": "center",
+        "priority": "secondary",
+        "requiresConsent": true,
+        "payload": {
+          "placeId": "fixture-donghu",
+          "label": "Donghu",
+          "competitionScenario": "premium-journey",
+          "source": "simulated",
+          "etaImpactMinutes": 12
+        },
+        "requestedByRole": "rear",
+        "createdAt": 1791142370587,
+        "status": "completed",
+        "traceId": "scenario:competition-premium-journey",
+        "lastDecision": {
+          "decisionId": "db266fcd-3160-4711-a9f8-d58913a5b942",
+          "proposalId": "premium-donghu",
+          "traceId": "scenario:competition-premium-journey",
+          "consentRequired": true,
+          "targetRole": "center",
+          "policyVersion": "aura-action-gate-v1",
+          "decidedAt": 1791142370588,
+          "outcome": "EXECUTE",
+          "reasonCode": "CONSENT_GRANTED_POLICY_REVALIDATED"
+        },
+        "lastReasonCode": "JOURNEY_STOP_ADDED",
+        "consentGranted": true
+      }
+    ],
+    "activeTasks": [],
+    "latestSignals": {
+      "connectivity.mode": {
+        "signalId": "sim:competition-premium-journey:cloud-restored",
+        "type": "connectivity.mode",
+        "value": {
+          "mode": "online",
+          "evidence": "scenario-fixture:cloud-restored"
+        },
+        "source": "simulated",
+        "timestamp": 1791142427582
+      },
+      "driver.cognitive_load": {
+        "signalId": "sim:competition-premium-journey:load-normal",
+        "type": "driver.cognitive_load",
+        "value": {
+          "level": "normal",
+          "confidence": 0.95
+        },
+        "source": "simulated",
+        "timestamp": 1791142392082
+      }
+    },
+    "displayConnections": {},
+    "journey": {
+      "stops": [
+        {
+          "stopId": "premium-donghu",
+          "sourceProposalId": "premium-donghu",
+          "label": "Donghu",
+          "placeId": "fixture-donghu",
+          "addedAt": 1791142370588
+        }
+      ]
+    },
+    "connectivity": {
+      "mode": "online",
+      "source": "simulated",
+      "observedAt": 1791142370589,
+      "freshness": "fresh",
+      "evidence": "scenario-fixture:cloud-restored"
+    },
+    "activeSafetyWarning": null
+  },
+  "verification": {
+    "runtime_replays": 3,
+    "node_tests": 175,
+    "python_tests": 14,
+    "schema_validation": "each event and shared state in three replay test",
+    "browser_flow": [
+      "RESET",
+      "Window ADD TO JOURNEY → DEFER",
+      "LOAD NORMAL → ASK",
+      "Center ACCEPT → journey updated",
+      "CLOUD OFFLINE → unavailable",
+      "QUIET MODE → local EXECUTE",
+      "CLOUD RESTORE → available_but_held",
+      "RESUME → presented"
+    ],
+    "scope": "simulated context/cloud fixture; local runtime and Gateway; no production or physical device claim"
+  }
+}

@@ -7,10 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:pact": "tsc -b && vite build --config vite.pact.config.ts"
   },
   "dependencies": {
     "mapbox-gl": "^3.32.0",
+    "maplibre-gl": "^6.12.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-map-gl": "^8.1.3"

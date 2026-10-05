@@ -1,0 +1,9 @@
+{
+  "type": "front_cabin",
+  "prompt": "A cinematic, hyper-realistic wide-angle photograph of the front cabin interior of a premium flagship executive sedan. The design is restrained and modern, featuring dark graphite and black leather upholstery, matte metal accents, and sleek glass surfaces. Subtle warm ambient illumination traces the elegant contours of the dashboard and center console. The dashboard features three distinct digital displays: a driver cluster, a central infotainment screen, and a passenger display, all seamlessly integrated into the clean architectural lines of the cabin. Shot in 8k resolution with photorealistic lighting, soft shadows, and deep contrast, emphasizing luxury, quiet intelligence, and spaciousness. No brand logos, no steering wheel logo.",
+  "seed": 442029445,
+  "width": 1536,
+  "height": 864,
+  "model": "qwen_image_2.1_int8_convrot.safetensors",
+  "workflow": "film_assets/candidates/front_cabin/temp_wf_442029445.json"
+}

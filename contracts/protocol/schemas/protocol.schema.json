@@ -325,7 +325,55 @@
           },
           "additionalProperties": false
         }
-      ]
+      ,
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "type": {
+              "const": "rear.mode.set"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "normal",
+                    "quiet"
+                  ]
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "type": {
+              "const": "demo.reset"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+]
     },
     "taskLifecycleCommand": {
       "oneOf": [
@@ -577,8 +625,12 @@
       },
       "additionalProperties": false
     },
+    "cabinCommand": {"type": "object", "additionalProperties": false, "required": ["kind", "protocolVersion", "requestId", "command"], "properties": {"kind": {"const": "cabin.command"}, "protocolVersion": {"const": 1}, "requestId": {"type": "string", "minLength": 1, "maxLength": 100}, "command": {"oneOf": [{"type": "object", "additionalProperties": false, "required": ["type", "count", "policy"], "properties": {"type": {"const": "people.set"}, "count": {"type": "integer", "minimum": 1, "maximum": 6}, "policy": {"enum": ["majority_driver", "unanimous", "majority"]}}}, {"type": "object", "additionalProperties": false, "required": ["type", "dataUrl", "personId"], "properties": {"type": {"const": "photo.share"}, "dataUrl": {"type": "string", "maxLength": 750000, "pattern": "^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$"}, "personId": {"type": "string", "minLength": 1, "maxLength": 64}}}, {"type": "object", "additionalProperties": false, "required": ["type", "photoId"], "properties": {"type": {"const": "photo.ack"}, "photoId": {"type": "string", "minLength": 1, "maxLength": 100}}}, {"type": "object", "additionalProperties": false, "required": ["type", "photoId"], "properties": {"type": {"const": "image.search"}, "photoId": {"type": "string", "minLength": 1, "maxLength": 100}}}, {"type": "object", "additionalProperties": false, "required": ["type", "personId", "text"], "properties": {"type": {"const": "caption.send"}, "personId": {"type": "string", "minLength": 1, "maxLength": 64}, "text": {"type": "string", "minLength": 1, "maxLength": 1000}}}, {"type": "object", "additionalProperties": false, "required": ["type", "personId", "data", "mimeType", "purpose"], "properties": {"type": {"const": "speech.transcribe"}, "personId": {"type": "string", "minLength": 1, "maxLength": 64}, "data": {"type": "string", "minLength": 4, "maxLength": 1400000, "pattern": "^[A-Za-z0-9+/]+={0,2}$"}, "mimeType": {"enum": ["audio/webm", "audio/mp4", "audio/ogg", "audio/wav"]}, "purpose": {"enum": ["caption", "journey", "vote", "trip_edit"]}, "ballotId": {"type": "string", "minLength": 1, "maxLength": 100}, "tripVersion": {"type": "integer", "minimum": 0}}}, {"type": "object", "additionalProperties": false, "required": ["type", "query", "recommend"], "properties": {"type": {"const": "place.search"}, "query": {"type": "string", "minLength": 1, "maxLength": 300}, "recommend": {"type": "boolean"}}}, {"type": "object", "additionalProperties": false, "required": ["type", "origin", "destination"], "properties": {"type": {"const": "trip.configure"}, "origin": {"type": "string", "minLength": 1, "maxLength": 300}, "destination": {"type": "string", "minLength": 1, "maxLength": 300}}}, {"type": "object", "additionalProperties": false, "required": ["type", "personId", "placeId"], "properties": {"type": {"const": "trip.propose"}, "personId": {"type": "string", "minLength": 1, "maxLength": 64}, "placeId": {"type": "string", "minLength": 1, "maxLength": 256}, "votingEnabled": {"type": "boolean"}, "startDelaySeconds": {"type": "integer", "minimum": 0, "maximum": 3600}, "voteDurationSeconds": {"type": "integer", "minimum": 10, "maximum": 300}}}, {"type": "object", "additionalProperties": false, "required": ["type", "personId", "ballotId", "approve"], "properties": {"type": {"const": "vote.cast"}, "personId": {"type": "string", "minLength": 1, "maxLength": 64}, "ballotId": {"type": "string", "minLength": 1, "maxLength": 100}, "approve": {"type": "boolean"}}}, {"type": "object", "additionalProperties": false, "required": ["type", "ballotId"], "properties": {"type": {"const": "vote.retry"}, "ballotId": {"type": "string", "minLength": 1, "maxLength": 100}}}, {"type": "object", "additionalProperties": false, "required": ["type", "version", "placeId"], "properties": {"type": {"const": "trip.remove"}, "version": {"type": "integer", "minimum": 0}, "placeId": {"type": "string", "minLength": 1, "maxLength": 256}}}, {"type": "object", "additionalProperties": false, "required": ["type", "version"], "properties": {"type": {"const": "trip.clear"}, "version": {"type": "integer", "minimum": 0}}}, {"type": "object", "additionalProperties": false, "required": ["type", "mode", "version"], "properties": {"type": {"const": "navigation.start"}, "mode": {"enum": ["gps", "demo"]}, "version": {"type": "integer", "minimum": 0}}}, {"type": "object", "additionalProperties": false, "required": ["type"], "properties": {"type": {"const": "navigation.stop"}}}, {"type": "object", "additionalProperties": false, "required": ["type", "version", "longitude", "latitude", "accuracy", "speed", "observedAt"], "properties": {"type": {"const": "navigation.position"}, "version": {"type": "integer", "minimum": 0}, "longitude": {"type": "number", "minimum": -180, "maximum": 180}, "latitude": {"type": "number", "minimum": -90, "maximum": 90}, "accuracy": {"type": "number", "minimum": 0, "maximum": 100000}, "speed": {"type": "number", "minimum": 0, "maximum": 100}, "observedAt": {"type": "integer", "minimum": 0}}}, {"type": "object", "additionalProperties": false, "required": ["type"], "properties": {"type": {"const": "place.cached"}, "query": {"type": "string", "maxLength": 300}}}]}}},
+    "cabinState": {"type": "object", "additionalProperties": false, "required": ["kind", "protocolVersion", "state"], "properties": {"kind": {"const": "cabin.state"}, "protocolVersion": {"const": 1}, "state": {"type": "object", "required": ["revision", "people", "policy", "trip", "photos", "captions", "ballot", "capabilities"], "properties": {"revision": {"type": "integer", "minimum": 0}}}}},
+    "cabinResult": {"type": "object", "additionalProperties": false, "required": ["kind", "protocolVersion", "requestId", "status"], "properties": {"kind": {"const": "cabin.result"}, "protocolVersion": {"const": 1}, "requestId": {"type": "string", "minLength": 1, "maxLength": 100}, "status": {"enum": ["ok", "error"]}, "errorCode": {"type": "string", "minLength": 1, "maxLength": 100}, "text": {"type": "string", "maxLength": 3000}, "provider": {"type": "string", "minLength": 1, "maxLength": 200}, "source": {"enum": ["voice", "keyboard", "api", "cache"]}, "places": {"type": "array", "maxItems": 5, "items": {"type": "object"}}, "images": {"type": "array", "maxItems": 4, "items": {"type": "object"}}}},
     "clientMessage": {
       "oneOf": [
+        { "$ref": "#/definitions/cabinCommand" },
         {
           "$ref": "#/definitions/registerMessage"
         },
@@ -699,6 +751,7 @@
         "traceId"
       ],
       "properties": {
+        "lastDecision": { "$ref": "#/definitions/policyDecision" },
         "proposalId": {
           "$ref": "#/definitions/id"
         },
@@ -1047,7 +1100,9 @@
             { "type": "null" }
           ]
         }
-      },
+      ,
+        "rearExperience": { "$ref": "#/definitions/rearExperience" }
+},
       "additionalProperties": false
     },
     "presenceSnapshot": {
@@ -1999,6 +2054,7 @@
           },
           "additionalProperties": false
         },
+        {"type": "object", "required": ["eventId", "sequence", "sessionId", "traceId", "commandId", "occurredAt", "type", "payload"], "properties": {"eventId": {"$ref": "#/definitions/id"}, "sequence": {"type": "integer", "minimum": 1}, "sessionId": {"$ref": "#/definitions/id"}, "traceId": {"$ref": "#/definitions/id"}, "commandId": {"type": ["string", "null"], "maxLength": 128}, "occurredAt": {"type": "integer", "minimum": 0}, "type": {"const": "journey.stops.replaced"}, "payload": {"type": "object", "additionalProperties": false, "required": ["stops"], "properties": {"stops": {"type": "array", "items": {"$ref": "#/definitions/journeyStop"}}}}}, "additionalProperties": false},
         {
           "type": "object",
           "required": [
@@ -2045,7 +2101,130 @@
           },
           "additionalProperties": false
         }
-      ]
+      ,
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "rear.experience.changed"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "experience",
+                "decision",
+                "actor",
+                "reasonCode"
+              ],
+              "properties": {
+                "experience": {
+                  "$ref": "#/definitions/rearExperience"
+                },
+                "decision": {
+                  "const": "EXECUTE"
+                },
+                "actor": {
+                  "const": "rear"
+                },
+                "reasonCode": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "eventId",
+            "sequence",
+            "sessionId",
+            "traceId",
+            "commandId",
+            "occurredAt",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "eventId": {
+              "$ref": "#/definitions/id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sessionId": {
+              "$ref": "#/definitions/id"
+            },
+            "traceId": {
+              "$ref": "#/definitions/id"
+            },
+            "commandId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": {
+              "const": "demo.reset"
+            },
+            "payload": {
+              "type": "object",
+              "required": [
+                "state"
+              ],
+              "properties": {
+                "state": {
+                  "$ref": "#/definitions/sharedState"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+]
     },
     "commandReceipt": {
       "type": "object",
@@ -2339,6 +2518,24 @@
         "rationale": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
         "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/journeyEvidenceSummary"}},
         "wholeJourneyContext": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/definitions/journeyEvidenceSummary"}},
+        "aiAnalysis": {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "provider", "model"],
+          "properties": {
+            "status": {"enum": ["completed", "unavailable"]},
+            "provider": {"enum": ["gemini", "ollama"]},
+            "model": {"type": "string", "minLength": 1, "maxLength": 256},
+            "summary": {"type": "string", "minLength": 1, "maxLength": 500},
+            "observedAt": {"type": "number", "minimum": 0},
+            "durationMs": {"type": "number", "minimum": 0},
+            "errorCode": {"type": "string", "minLength": 1, "maxLength": 100},
+            "fallbackReason": {"type": "string", "minLength": 1, "maxLength": 100}
+          },
+          "oneOf": [
+            {"properties": {"status": {"const": "completed"}}, "required": ["summary", "observedAt", "durationMs"], "not": {"required": ["errorCode"]}},
+            {"properties": {"status": {"const": "unavailable"}}, "required": ["errorCode"], "not": {"anyOf": [{"required": ["summary"]}, {"required": ["observedAt"]}, {"required": ["durationMs"]}]}}
+          ]
+        },
         "alternatives": {"type": "array", "maxItems": 50, "items": {"$ref": "#/definitions/journeyRecommendationOptionSummary"}}
       },
       "additionalProperties": false
@@ -2432,6 +2629,8 @@
     },
     "serverMessage": {
       "oneOf": [
+        { "$ref": "#/definitions/cabinState" },
+        { "$ref": "#/definitions/cabinResult" },
         {
           "$ref": "#/definitions/welcomeMessage"
         },
@@ -2733,5 +2932,40 @@
       },
       "additionalProperties": false
     }
-  }
+  ,
+    "rearExperience": {
+      "type": "object",
+      "required": [
+        "mode",
+        "liveJourney",
+        "source"
+      ],
+      "properties": {
+        "decidedAt": { "type": "number", "minimum": 0 },
+        "mode": {
+          "enum": [
+            "normal",
+            "quiet"
+          ]
+        },
+        "liveJourney": {
+          "enum": [
+            "unavailable",
+            "presented",
+            "available_but_held"
+          ]
+        },
+        "source": {
+          "const": "scenario-fixture"
+        },
+        "traceId": {
+          "$ref": "#/definitions/id"
+        },
+        "reasonCode": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+}
 }
